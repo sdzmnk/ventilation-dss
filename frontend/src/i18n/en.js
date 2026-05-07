@@ -78,6 +78,8 @@ export default {
   edit: "Edit",
   lastValue: "Latest value",
   lastSeen: "Updated",
+  code: "Code",
+  name: "Name",
   showHistory: "Show history",
   hideHistory: "Hide history",
   noHistory: "No data for the last 24 hours",

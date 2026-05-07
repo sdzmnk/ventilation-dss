@@ -133,7 +133,7 @@ export default function ChatPage() {
                   <button className="btn-secondary px-2.5" onClick={createRoom}><Plus className="w-4 h-4" /></button>
                 </div>
                 <button className="btn-secondary w-full text-xs" onClick={() => setShowUsers(true)}>
-                  💬 Написати
+                   Написати
                 </button>
               </div>
             </>
@@ -166,7 +166,7 @@ export default function ChatPage() {
               <MessageSquare className="w-4 h-4 text-slate-400" />
             )}
             <h3 className="font-semibold text-slate-900 dark:text-white">
-              {active ? (active.is_dm ? `💬 ${active.other_username}` : `# ${active.name}`) : t("pickRoom")}
+              {active ? (active.is_dm ? `${active.other_username}` : `# ${active.name}`) : t("pickRoom")}
             </h3>
           </div>
           <div ref={logRef} className="flex-1 overflow-y-auto p-5 space-y-3">

@@ -115,13 +115,13 @@ export default function SensorsPage() {
       <SectionCard title={t("zones")}>
         {canEdit && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-            <div><label className="label">code</label><input className="input" value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} /></div>
-            <div><label className="label">name</label><input className="input" value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} /></div>
+            <div><label className="label">{t("code")}</label><input className="input" value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} /></div>
+            <div><label className="label">{t("name")}</label><input className="input" value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} /></div>
             <div><label className="label">{t("description")}</label><input className="input" value={zoneForm.description} onChange={(e) => setZoneForm({ ...zoneForm, description: e.target.value })} /></div>
             <div className="flex items-end"><button className="btn w-full" onClick={addZone}><Plus className="w-4 h-4" />{t("add")}</button></div>
           </div>
         )}
-        <DataTable headers={["#", "code", t("zone"), t("description"), ""]}>
+        <DataTable headers={["#", t("code"), t("zone"), t("description"), ""]}>
           {zones.map((z) => {
             const isEditing = editZone?.id === z.id;
             return (
@@ -167,7 +167,7 @@ export default function SensorsPage() {
                 {zones.map((z) => <option key={z.id} value={z.id}>{z.code} · {z.name}</option>)}
               </select>
             </div>
-            <div><label className="label">code</label><input className="input" value={sensorForm.code} onChange={(e) => setSensorForm({ ...sensorForm, code: e.target.value })} /></div>
+            <div><label className="label">{t("code")}</label><input className="input" value={sensorForm.code} onChange={(e) => setSensorForm({ ...sensorForm, code: e.target.value })} /></div>
             <div><label className="label">{t("type")}</label>
               <select className="input" value={sensorForm.sensor_type} onChange={(e) => setSensorForm({ ...sensorForm, sensor_type: e.target.value })}>
                 {SENSOR_TYPES.map((s) => <option key={s} value={s}>{t(s)}</option>)}
@@ -178,7 +178,7 @@ export default function SensorsPage() {
           </div>
         )}
 
-        <DataTable headers={["", "#", t("zone"), "code", t("type"), t("unit"), t("lastValue"), t("lastSeen"), ""]}>
+        <DataTable headers={["", "#", t("zone"), t("code"), t("type"), t("unit"), t("lastValue"), t("lastSeen"), ""]}>
           {sensors.map((s) => {
             const isEditing = editSensor?.id === s.id;
             const isOpen = expanded === s.id;
