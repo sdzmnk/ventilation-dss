@@ -1,0 +1,9 @@
+CREATE SCHEMA IF NOT EXISTS discovery;
+
+CREATE TABLE IF NOT EXISTS discovery.services (
+    id        BIGSERIAL PRIMARY KEY,
+    name      VARCHAR(255) UNIQUE NOT NULL,
+    url       VARCHAR(500) NOT NULL,
+    healthy   BOOLEAN      NOT NULL DEFAULT TRUE,
+    last_seen TIMESTAMP    NOT NULL DEFAULT NOW()
+);

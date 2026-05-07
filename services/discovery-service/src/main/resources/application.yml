@@ -1,0 +1,35 @@
+server:
+  port: ${SERVICE_PORT:8006}
+
+spring:
+  application:
+    name: discovery-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:${POSTGRES_PORT:5432}/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    hikari:
+      minimum-idle: 1
+      maximum-pool-size: 5
+  jpa:
+    defer-datasource-initialization: true
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  sql:
+    init:
+      mode: always
+  main:
+    web-application-type: servlet
+
+discovery:
+  default-services:
+    auth-service: ${AUTH_URL:http://auth-service:8001}
+    user-service: ${USER_URL:http://user-service:8002}
+    data-service: ${DATA_URL:http://data-service:8003}
+    analytic-service: ${ANALYTIC_URL:http://analytic-service:8004}
+    config-service: ${CONFIG_URL:http://config-service:8005}
+    chat-service: ${CHAT_URL:http://chat-service:8007}
+    gateway-service: ${GATEWAY_URL:http://gateway-service:8000}

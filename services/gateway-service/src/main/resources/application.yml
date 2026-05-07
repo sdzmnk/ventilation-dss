@@ -1,0 +1,78 @@
+server:
+  port: ${SERVICE_PORT:8000}
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+      routes:
+        - id: auth
+          uri: ${AUTH_URL:http://auth-service:8001}
+          predicates:
+            - Path=/auth/**
+
+        - id: users
+          uri: ${USER_URL:http://user-service:8002}
+          predicates:
+            - Path=/users/**
+
+        - id: zones
+          uri: ${DATA_URL:http://data-service:8003}
+          predicates:
+            - Path=/zones/**
+
+        - id: sensors
+          uri: ${DATA_URL:http://data-service:8003}
+          predicates:
+            - Path=/sensors/**
+
+        - id: readings
+          uri: ${DATA_URL:http://data-service:8003}
+          predicates:
+            - Path=/readings/**
+
+        - id: simulate
+          uri: ${DATA_URL:http://data-service:8003}
+          predicates:
+            - Path=/simulate/**
+
+        - id: analytic
+          uri: ${ANALYTIC_URL:http://analytic-service:8004}
+          predicates:
+            - Path=/analytic/**
+
+        - id: config
+          uri: ${CONFIG_URL:http://config-service:8005}
+          predicates:
+            - Path=/config/**
+
+        - id: registry
+          uri: ${DISCOVERY_URL:http://discovery-service:8006}
+          predicates:
+            - Path=/registry/**
+
+        - id: chat-ws
+          uri: ${CHAT_URL:http://chat-service:8007}
+          predicates:
+            - Path=/chat/ws/**
+
+        - id: chat
+          uri: ${CHAT_URL:http://chat-service:8007}
+          predicates:
+            - Path=/chat/**
+
+services:
+  auth: ${AUTH_URL:http://auth-service:8001}
+  user: ${USER_URL:http://user-service:8002}
+  data: ${DATA_URL:http://data-service:8003}
+  analytic: ${ANALYTIC_URL:http://analytic-service:8004}
+  config: ${CONFIG_URL:http://config-service:8005}
+  discovery: ${DISCOVERY_URL:http://discovery-service:8006}
+  chat: ${CHAT_URL:http://chat-service:8007}

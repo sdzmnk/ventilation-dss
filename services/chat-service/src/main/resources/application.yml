@@ -1,0 +1,26 @@
+server:
+  port: ${SERVICE_PORT:8007}
+
+spring:
+  application:
+    name: chat-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:${POSTGRES_PORT:5432}/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    hikari:
+      minimum-idle: 1
+      maximum-pool-size: 5
+  jpa:
+    defer-datasource-initialization: true
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  sql:
+    init:
+      mode: always
+
+jwt:
+  secret: ${JWT_SECRET:dev-secret-for-ventilation-dss!!}
