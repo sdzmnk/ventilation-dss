@@ -40,6 +40,7 @@ async def get_pool() -> asyncpg.Pool:
             port=int(os.getenv("POSTGRES_PORT", "5432")),
             min_size=1,
             max_size=5,
+            ssl=False,
         )
     return pool
 
