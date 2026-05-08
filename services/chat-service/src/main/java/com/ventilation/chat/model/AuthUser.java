@@ -2,10 +2,12 @@ package com.ventilation.chat.model;
 
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.Setter;
 
 @Entity
 @Table(schema = "auth", name = "users")
 @Getter
+@Setter
 public class AuthUser {
 
     @Id

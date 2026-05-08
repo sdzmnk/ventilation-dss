@@ -60,8 +60,12 @@ def patch_db_and_startup(mock_pool, mock_conn):
     async def fake_seed():
         pass
 
+    async def fake_ensure_topology():
+        pass
+
     with patch("asyncpg.create_pool", side_effect=fake_create_pool), \
          patch("app.main._seed_history", fake_seed), \
+         patch("app.main._ensure_topology", fake_ensure_topology), \
          patch("asyncio.create_task"):
         import app.main as m
         m.pool = mock_pool

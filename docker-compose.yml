@@ -49,6 +49,11 @@ services:
     environment:
       SERVICE_NAME: data-service
       SERVICE_PORT: 8003
+      VENT_DATASET_CSV: /data/ventilation_history.csv
+      VENT_BASELINES_JSON: /data/ventilation_baselines.json
+    volumes:
+      - ./db/ventilation_history.csv:/data/ventilation_history.csv:ro
+      - ./db/ventilation_baselines.json:/data/ventilation_baselines.json:ro
     ports:
       - "8003:8003"
 
@@ -58,6 +63,9 @@ services:
     environment:
       SERVICE_NAME: analytic-service
       SERVICE_PORT: 8004
+      VENT_BASELINES_JSON: /data/ventilation_baselines.json
+    volumes:
+      - ./db/ventilation_baselines.json:/data/ventilation_baselines.json:ro
     ports:
       - "8004:8004"
 

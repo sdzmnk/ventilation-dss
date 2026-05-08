@@ -4,7 +4,17 @@ import { api } from "../api/client.js";
 import { useI18n } from "../i18n/i18n.jsx";
 import { useAuth } from "../api/auth.jsx";
 
-const SENSOR_TYPES = ["radiation", "pressure", "airflow", "temperature"];
+// All sensor types known to the system, derived from the 2020-2024 dataset.
+const SENSOR_TYPES = [
+  "wind_speed", "wind_direction", "air_density",
+  "pressure_kp", "pressure_oo",
+  "flow_kp_in", "flow_oo_out", "flow_oo_in",
+  "dp_kp_os", "dp_oo_os_8", "dp_oo_os_9",
+  "dp_kp_oo", "dp_kp_oo_by", "dp_kp_oo_bz", "dp_kp_oo_ca",
+  "gu_pressure_west_wall", "gu_pressure_east_wall", "gu_pressure_cyl_wall",
+  "gu_pressure_west_gap", "gu_pressure_east_gap", "gu_pressure_vsro",
+  "gu_sigma_008", "gu_sigma_009", "gu_sigma_kp_os",
+];
 
 export default function SensorsPage() {
   const { t } = useI18n();
@@ -16,7 +26,7 @@ export default function SensorsPage() {
   const [sensors, setSensors] = useState([]);
   const [latest, setLatest] = useState([]);
   const [zoneForm, setZoneForm] = useState({ code: "", name: "", description: "" });
-  const [sensorForm, setSensorForm] = useState({ zone_id: "", code: "", sensor_type: "radiation", unit: "" });
+  const [sensorForm, setSensorForm] = useState({ zone_id: "", code: "", sensor_type: "pressure_kp", unit: "Па" });
   const [editZone, setEditZone] = useState(null);   // {id, code, name, description}
   const [editSensor, setEditSensor] = useState(null); // {id, zone_id, code, sensor_type, unit}
   const [expanded, setExpanded] = useState(null);   // sensor_id
@@ -74,7 +84,7 @@ export default function SensorsPage() {
     if (!sensorForm.code || !sensorForm.unit) return;
     try {
       await api.post("/sensors", { ...sensorForm, zone_id: sensorForm.zone_id ? Number(sensorForm.zone_id) : null });
-      setSensorForm({ zone_id: "", code: "", sensor_type: "radiation", unit: "" });
+      setSensorForm({ zone_id: "", code: "", sensor_type: "pressure_kp", unit: "Па" });
       load();
     } catch (e) { setErr(e?.response?.data?.detail || String(e)); }
   };
@@ -203,13 +213,15 @@ export default function SensorsPage() {
                   </Td>
                   <Td>{isEditing
                     ? <input className="input py-1" value={editSensor.code} onChange={(e) => setEditSensor({ ...editSensor, code: e.target.value })} />
-                    : <code>{s.code}</code>}</Td>
+                    : <code className="text-xs text-slate-500 dark:text-slate-400">{s.code}</code>}</Td>
                   <Td>
                     {isEditing ? (
                       <select className="input py-1" value={editSensor.sensor_type} onChange={(e) => setEditSensor({ ...editSensor, sensor_type: e.target.value })}>
                         {SENSOR_TYPES.map((x) => <option key={x} value={x}>{t(x)}</option>)}
                       </select>
-                    ) : t(s.sensor_type)}
+                    ) : (
+                      <span className="font-medium text-slate-800 dark:text-slate-100">{t(s.sensor_type)}</span>
+                    )}
                   </Td>
                   <Td>{isEditing
                     ? <input className="input py-1" value={editSensor.unit} onChange={(e) => setEditSensor({ ...editSensor, unit: e.target.value })} />

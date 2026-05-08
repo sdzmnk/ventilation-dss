@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS profile.user_profiles (
 );
 
 -- ===== sensors (data-service) =====
+-- The schema is unchanged — we just feed it real channel topology below.
 CREATE TABLE IF NOT EXISTS sensors.zones (
     id          BIGSERIAL PRIMARY KEY,
     code        VARCHAR(32) UNIQUE NOT NULL,
@@ -56,7 +57,7 @@ CREATE TABLE IF NOT EXISTS sensors.sensors (
     id          BIGSERIAL PRIMARY KEY,
     zone_id     BIGINT REFERENCES sensors.zones(id) ON DELETE CASCADE,
     code        VARCHAR(64) UNIQUE NOT NULL,
-    sensor_type VARCHAR(32) NOT NULL,
+    sensor_type VARCHAR(64) NOT NULL,
     unit        VARCHAR(32) NOT NULL
 );
 
@@ -68,24 +69,51 @@ CREATE TABLE IF NOT EXISTS sensors.readings (
 );
 CREATE INDEX IF NOT EXISTS idx_readings_sensor_time ON sensors.readings(sensor_id, measured_at DESC);
 
--- seed zones / sensors
+-- Zone topology mirrors the real plant layout in the source dataset:
+--   ENV — навколишнє середовище (вітер, густина повітря)
+--   KP  — герметична зона / контайнмент (Тиск КП, Витрата КП+)
+--   OO  — приміщення обстеження-обслуговування (Тиск ОО, Витрати ОО±)
+--   DIFF — перепади тисків між КП / ОО / ОС
+--   GU  — гермоустановка: тиски на стінках і зазорах
 INSERT INTO sensors.zones (code, name, description) VALUES
-    ('Z-01', 'Реакторний зал', 'Основна зона радіаційного контролю'),
-    ('Z-02', 'Машинний зал', 'Машинне обладнання'),
-    ('Z-03', 'Сховище ВЯП', 'Сховище відпрацьованого ядерного палива')
+    ('ENV',  'Зовнішнє середовище',          'Метеопараметри: вітер, густина повітря'),
+    ('KP',   'Герметична зона (контайнмент)', 'Тиск і витрата у герметичній зоні'),
+    ('OO',   'Приміщення обстеження-обслуговування', 'Тиск і витрати у зоні ОО'),
+    ('DIFF', 'Перепади тисків',               'Перепади між зонами КП, ОО, ОС (різні точки виміру)'),
+    ('GU',   'Гермоустановка',                'Тиски на стінках, зазорах та СКО')
 ON CONFLICT DO NOTHING;
 
+-- 24 sensors covering every channel from output_sum 2020-2024.xlsx
 INSERT INTO sensors.sensors (zone_id, code, sensor_type, unit) VALUES
-    (1, 'R-01-RAD', 'radiation', 'мкЗв/год'),
-    (1, 'R-01-PRES', 'pressure', 'Па'),
-    (1, 'R-01-FLOW', 'airflow', 'м³/год'),
-    (1, 'R-01-TEMP', 'temperature', '°C'),
-    (2, 'M-02-RAD', 'radiation', 'мкЗв/год'),
-    (2, 'M-02-PRES', 'pressure', 'Па'),
-    (2, 'M-02-FLOW', 'airflow', 'м³/год'),
-    (3, 'S-03-RAD', 'radiation', 'мкЗв/год'),
-    (3, 'S-03-PRES', 'pressure', 'Па'),
-    (3, 'S-03-FLOW', 'airflow', 'м³/год')
+    -- ENV
+    ((SELECT id FROM sensors.zones WHERE code='ENV'),  'ENV-WSP',   'wind_speed',           'м/с'),
+    ((SELECT id FROM sensors.zones WHERE code='ENV'),  'ENV-WDIR',  'wind_direction',       '°'),
+    ((SELECT id FROM sensors.zones WHERE code='ENV'),  'ENV-RHO',   'air_density',          'кг/м³'),
+    -- KP
+    ((SELECT id FROM sensors.zones WHERE code='KP'),   'KP-PRES',   'pressure_kp',          'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='KP'),   'KP-FLOW-IN','flow_kp_in',           'тис. м³/год'),
+    -- OO
+    ((SELECT id FROM sensors.zones WHERE code='OO'),   'OO-PRES',   'pressure_oo',          'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='OO'),   'OO-FLOW-OUT','flow_oo_out',         'тис. м³/год'),
+    ((SELECT id FROM sensors.zones WHERE code='OO'),   'OO-FLOW-IN','flow_oo_in',           'тис. м³/год'),
+    -- DIFF
+    ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-KP-OS',     'dp_kp_os',          'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-OO-OS-8',   'dp_oo_os_8',        'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-OO-OS-9',   'dp_oo_os_9',        'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-KP-OO',     'dp_kp_oo',          'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-KP-OO-BY',  'dp_kp_oo_by',       'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-KP-OO-BZ',  'dp_kp_oo_bz',       'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-KP-OO-CA',  'dp_kp_oo_ca',       'Па'),
+    -- GU
+    ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-P-W',     'gu_pressure_west_wall', 'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-P-E',     'gu_pressure_east_wall', 'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-P-CYL',   'gu_pressure_cyl_wall',  'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-P-WGAP',  'gu_pressure_west_gap',  'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-P-EGAP',  'gu_pressure_east_gap',  'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-P-VSRO',  'gu_pressure_vsro',      'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-S-008',   'gu_sigma_008',          'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-S-009',   'gu_sigma_009',          'Па'),
+    ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-S-KPOS',  'gu_sigma_kp_os',        'Па')
 ON CONFLICT DO NOTHING;
 
 -- ===== analytic =====
@@ -109,15 +137,23 @@ CREATE TABLE IF NOT EXISTS configuration.parameters (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Defaults calibrated from the 2020-2024 dataset (output_sum *.xlsx)
 INSERT INTO configuration.parameters (key, value, description) VALUES
-    ('radiation_limit_uSv', '20.0', 'Гранична потужність дози (мкЗв/год)'),
-    ('pressure_min_pa', '-50.0', 'Мінімальний перепад тиску, Па'),
-    ('pressure_max_pa', '-200.0', 'Максимальний перепад тиску, Па'),
-    ('airflow_min_m3h', '5000', 'Мінімальна витрата повітря, м³/год'),
-    ('airflow_max_m3h', '40000', 'Максимальна витрата повітря, м³/год'),
-    ('energy_cost_kwh', '0.12', 'Вартість 1 кВт·год'),
-    ('fan_power_kw', '15.0', 'Потужність вентилятора, кВт'),
-    ('filter_efficiency', '0.999', 'Ефективність HEPA фільтру')
+    ('pressure_kp_min_pa',   '-50.0', 'Мінімальний тиск КП (Па) — нижче починається попередження'),
+    ('pressure_kp_max_pa',    '15.0', 'Максимальний тиск КП (Па)'),
+    ('pressure_oo_min_pa',   '-60.0', 'Мінімальний тиск ОО (Па)'),
+    ('pressure_oo_max_pa',    '15.0', 'Максимальний тиск ОО (Па)'),
+    ('dp_kp_oo_min_pa',      '-15.0', 'Мінімальний перепад КП-ОО (Па)'),
+    ('dp_kp_oo_max_pa',       '20.0', 'Максимальний перепад КП-ОО (Па)'),
+    ('flow_kp_min_km3h',      '10.0', 'Мінімальна витрата КП+ (тис. м³/год)'),
+    ('flow_kp_max_km3h',      '28.0', 'Максимальна витрата КП+ (тис. м³/год)'),
+    ('flow_oo_min_km3h',      '15.0', 'Мінімальна витрата ОО- (тис. м³/год)'),
+    ('flow_oo_max_km3h',      '40.0', 'Максимальна витрата ОО- (тис. м³/год)'),
+    ('wind_speed_alarm_ms',   '8.0',  'Порогова швидкість вітру для попередження (м/с)'),
+    ('gu_pressure_alarm_pa', '40.0',  'Поріг |тиску| на стінках ГУ для попередження (Па)'),
+    ('energy_cost_kwh',       '0.12', 'Вартість 1 кВт·год'),
+    ('fan_power_kw',          '15.0', 'Потужність вентилятора, кВт'),
+    ('filter_efficiency',     '0.999','Ефективність HEPA фільтру')
 ON CONFLICT DO NOTHING;
 
 -- ===== discovery =====

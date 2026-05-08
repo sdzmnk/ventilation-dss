@@ -4,25 +4,40 @@ import { api } from "../api/client.js";
 import { useI18n } from "../i18n/i18n.jsx";
 import { useAuth } from "../api/auth.jsx";
 
+// Keys mirror configuration.parameters seeded in db/init.sql
 const FRIENDLY_LABELS = {
-  radiation_limit_uSv: "Гранична потужність дози",
-  pressure_min_pa: "Мінімальний перепад тиску",
-  pressure_max_pa: "Максимальний перепад тиску",
-  airflow_min_m3h: "Мінімальна витрата повітря",
-  airflow_max_m3h: "Максимальна витрата повітря",
-  energy_cost_kwh: "Вартість 1 кВт·год",
-  fan_power_kw: "Потужність вентилятора",
-  filter_efficiency: "Ефективність HEPA фільтру",
+  pressure_kp_min_pa:    "Мін. тиск КП",
+  pressure_kp_max_pa:    "Макс. тиск КП",
+  pressure_oo_min_pa:    "Мін. тиск ОО",
+  pressure_oo_max_pa:    "Макс. тиск ОО",
+  dp_kp_oo_min_pa:       "Мін. перепад КП-ОО",
+  dp_kp_oo_max_pa:       "Макс. перепад КП-ОО",
+  flow_kp_min_km3h:      "Мін. витрата КП+",
+  flow_kp_max_km3h:      "Макс. витрата КП+",
+  flow_oo_min_km3h:      "Мін. витрата ОО−",
+  flow_oo_max_km3h:      "Макс. витрата ОО−",
+  wind_speed_alarm_ms:   "Поріг швидкості вітру",
+  gu_pressure_alarm_pa:  "Поріг тиску ГУ на стінках",
+  energy_cost_kwh:       "Вартість 1 кВт·год",
+  fan_power_kw:          "Потужність вентилятора",
+  filter_efficiency:     "Ефективність HEPA фільтру",
 };
 const UNITS = {
-  radiation_limit_uSv: "мкЗв/год",
-  pressure_min_pa: "Па",
-  pressure_max_pa: "Па",
-  airflow_min_m3h: "м³/год",
-  airflow_max_m3h: "м³/год",
-  energy_cost_kwh: "за кВт·год",
-  fan_power_kw: "кВт",
-  filter_efficiency: "0–1",
+  pressure_kp_min_pa:    "Па",
+  pressure_kp_max_pa:    "Па",
+  pressure_oo_min_pa:    "Па",
+  pressure_oo_max_pa:    "Па",
+  dp_kp_oo_min_pa:       "Па",
+  dp_kp_oo_max_pa:       "Па",
+  flow_kp_min_km3h:      "тис. м³/год",
+  flow_kp_max_km3h:      "тис. м³/год",
+  flow_oo_min_km3h:      "тис. м³/год",
+  flow_oo_max_km3h:      "тис. м³/год",
+  wind_speed_alarm_ms:   "м/с",
+  gu_pressure_alarm_pa:  "Па",
+  energy_cost_kwh:       "за кВт·год",
+  fan_power_kw:          "кВт",
+  filter_efficiency:     "0–1",
 };
 
 export default function ConfigPage() {

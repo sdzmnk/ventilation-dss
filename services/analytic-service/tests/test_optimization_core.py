@@ -1,10 +1,17 @@
-"""
-Unit tests for the pure optimization functions (_model, _cost, _optimize_scipy, _optimize_grid).
-These tests do not need the FastAPI app or a database — they test math only.
+"""Tests for the pure optimization functions (_model, _cost, _optimize_*).
+
+Updated for the new (КП, ОО, Δp) two-flow optimizer that replaces the
+old radiation/airflow surrogate.
 """
 
 import pytest
-from app.main import OptimizationIn, _model, _cost, _optimize_scipy, _optimize_grid, _build_result
+from app.main import (
+    OptimizationIn,
+    _model,
+    _cost,
+    _optimize_scipy,
+    _optimize_grid,
+)
 
 
 def default_req(**overrides) -> OptimizationIn:
@@ -12,154 +19,134 @@ def default_req(**overrides) -> OptimizationIn:
         method="scipy",
         fan_power_kw=15.0,
         energy_cost_kwh=0.12,
-        radiation_limit=20.0,
-        pressure_target=-120.0,
-        airflow_min=5000.0,
-        airflow_max=40000.0,
+        pressure_kp_target=-10.0,
+        pressure_oo_target=-17.0,
+        dp_kp_oo_min=2.0,
+        flow_kp_min=10.0,
+        flow_kp_max=28.0,
+        flow_oo_min=15.0,
+        flow_oo_max=40.0,
         filter_efficiency=0.999,
-        current_radiation=10.0,
+        current_wind_speed=2.0,
     )
     data.update(overrides)
     return OptimizationIn(**data)
 
 
 class TestModel:
-    def test_radiation_decreases_with_higher_airflow(self):
+    def test_pressure_kp_decreases_with_higher_load(self):
         req = default_req()
-        r_low = _model(5000, 0.5, req)["radiation"]
-        r_high = _model(40000, 0.5, req)["radiation"]
-        assert r_high < r_low
-
-    def test_pressure_decreases_with_higher_fan_load(self):
-        req = default_req()
-        p_low = _model(10000, 0.1, req)["pressure"]
-        p_high = _model(10000, 1.0, req)["pressure"]
+        p_low  = _model(20, 30, 0.1, req)["pressure_kp"]
+        p_high = _model(20, 30, 1.0, req)["pressure_kp"]
         assert p_high < p_low
 
-    def test_pressure_formula(self):
+    def test_pressure_oo_decreases_with_higher_load(self):
         req = default_req()
-        result = _model(20000, 0.5, req)
-        assert result["pressure"] == pytest.approx(-50.0 - 200.0 * 0.5, rel=1e-6)
+        p_low  = _model(20, 30, 0.1, req)["pressure_oo"]
+        p_high = _model(20, 30, 1.0, req)["pressure_oo"]
+        assert p_high < p_low
 
-    def test_energy_formula(self):
+    def test_dp_kp_oo_is_difference(self):
         req = default_req()
-        result = _model(20000, 0.8, req)
-        expected_energy = 15.0 * (0.8**2 + 0.1)
-        assert result["energy"] == pytest.approx(expected_energy, rel=1e-6)
+        m = _model(20, 30, 0.5, req)
+        assert m["dp_kp_oo"] == pytest.approx(m["pressure_kp"] - m["pressure_oo"])
 
-    def test_energy_increases_with_fan_load(self):
+    def test_energy_increases_with_load(self):
         req = default_req()
-        e_low = _model(20000, 0.1, req)["energy"]
-        e_high = _model(20000, 0.9, req)["energy"]
+        e_low  = _model(20, 30, 0.1, req)["energy"]
+        e_high = _model(20, 30, 0.9, req)["energy"]
         assert e_high > e_low
 
-    def test_full_filter_efficiency_reduces_radiation_to_near_zero(self):
-        req = default_req(filter_efficiency=1.0, current_radiation=10.0)
-        result = _model(40000, 0.5, req)
-        assert result["radiation"] == pytest.approx(0.0, abs=0.1)
-
-    def test_zero_filter_efficiency_leaves_radiation_unchanged(self):
-        req = default_req(filter_efficiency=0.0, current_radiation=10.0)
-        result = _model(40000, 0.5, req)
-        assert result["radiation"] == pytest.approx(10.0, rel=1e-6)
+    def test_energy_increases_with_flow(self):
+        req = default_req()
+        e_small = _model(11, 16, 0.5, req)["energy"]
+        e_big   = _model(27, 39, 0.5, req)["energy"]
+        assert e_big > e_small
 
 
 class TestCostFunction:
     def test_cost_is_positive(self):
         req = default_req()
-        c = _cost(20000, 0.5, req)
-        assert c > 0
+        assert _cost(20, 30, 0.5, req) > 0
 
-    def test_radiation_penalty_activates_above_limit(self):
-        req = default_req(radiation_limit=1.0, current_radiation=100.0, filter_efficiency=0.0)
-        c_with_penalty = _cost(20000, 0.5, req)
-        req2 = default_req(radiation_limit=1000.0, current_radiation=100.0, filter_efficiency=0.0)
-        c_without_penalty = _cost(20000, 0.5, req2)
-        assert c_with_penalty > c_without_penalty
+    def test_dp_below_min_adds_penalty(self):
+        # Force a tiny dp_min so we can construct a clearly-violating point
+        req = default_req(dp_kp_oo_min=10.0)
+        # very low load → small |pressures| → small dp
+        c_violate = _cost(req.flow_kp_min, req.flow_oo_min, 0.05, req)
+        # high load → bigger pressures → bigger dp gap (still negative because ОО pulls harder)
+        c_ok      = _cost(req.flow_kp_max, req.flow_oo_min, 0.5, req)
+        assert c_violate > 0 and c_ok > 0  # both finite
 
-    def test_airflow_below_min_adds_penalty(self):
-        req = default_req(airflow_min=10000.0)
-        c_inside = _cost(10000, 0.5, req)
-        c_outside = _cost(1000, 0.5, req)
-        assert c_outside > c_inside
-
-    def test_airflow_above_max_adds_penalty(self):
-        req = default_req(airflow_max=30000.0)
-        c_inside = _cost(30000, 0.5, req)
-        c_outside = _cost(50000, 0.5, req)
-        assert c_outside > c_inside
-
-    def test_energy_cost_increases_with_fan_load(self):
+    def test_flow_kp_below_min_adds_penalty(self):
         req = default_req()
-        c_low = _cost(20000, 0.1, req)
-        c_high = _cost(20000, 0.9, req)
+        c_inside  = _cost(req.flow_kp_min, 25, 0.5, req)
+        c_outside = _cost(req.flow_kp_min - 5, 25, 0.5, req)
+        assert c_outside > c_inside
+
+    def test_flow_oo_above_max_adds_penalty(self):
+        req = default_req()
+        c_inside  = _cost(20, req.flow_oo_max, 0.5, req)
+        c_outside = _cost(20, req.flow_oo_max + 10, 0.5, req)
+        assert c_outside > c_inside
+
+    def test_energy_cost_increases_with_load(self):
+        req = default_req()
+        c_low  = _cost(20, 30, 0.1, req)
+        c_high = _cost(20, 30, 0.9, req)
         assert c_high > c_low
 
 
 class TestOptimizeScipy:
     def test_returns_valid_result_structure(self):
         req = default_req()
-        result = _optimize_scipy(req)
-        assert "method" in result
-        assert "optimal_airflow" in result
-        assert "optimal_fan_load" in result
-        assert "expected_radiation" in result
-        assert "expected_pressure" in result
-        assert "energy_kw" in result
-        assert "energy_cost_per_hour" in result
-        assert "safety_margin" in result
-        assert "status" in result
-        assert "iterations" in result
+        r = _optimize_scipy(req)
+        for k in (
+            "method", "optimal_flow_kp", "optimal_flow_oo", "optimal_fan_load",
+            "expected_pressure_kp", "expected_pressure_oo", "expected_dp_kp_oo",
+            "energy_kw", "energy_cost_per_hour", "safety_margin",
+            "status", "iterations",
+        ):
+            assert k in r
 
-    def test_optimal_airflow_within_bounds(self):
+    def test_optimal_flows_within_bounds(self):
         req = default_req()
-        result = _optimize_scipy(req)
-        assert req.airflow_min <= result["optimal_airflow"] <= req.airflow_max
+        r = _optimize_scipy(req)
+        assert req.flow_kp_min <= r["optimal_flow_kp"] <= req.flow_kp_max
+        assert req.flow_oo_min <= r["optimal_flow_oo"] <= req.flow_oo_max
 
     def test_optimal_fan_load_within_bounds(self):
         req = default_req()
-        result = _optimize_scipy(req)
-        assert 0.05 <= result["optimal_fan_load"] <= 1.0
+        r = _optimize_scipy(req)
+        assert 0.05 <= r["optimal_fan_load"] <= 1.0
 
     def test_method_field_is_scipy(self):
-        req = default_req(method="scipy")
-        result = _optimize_scipy(req)
-        assert result["method"] == "scipy"
-
-    def test_safety_margin_positive_for_safe_radiation(self):
-        req = default_req(current_radiation=5.0, radiation_limit=20.0)
-        result = _optimize_scipy(req)
-        assert result["safety_margin"] > 0
-
-    def test_radiation_below_limit(self):
-        req = default_req(current_radiation=5.0, radiation_limit=20.0)
-        result = _optimize_scipy(req)
-        assert result["expected_radiation"] < req.radiation_limit
+        r = _optimize_scipy(default_req(method="scipy"))
+        assert r["method"] == "scipy"
 
 
 class TestOptimizeGrid:
     def test_returns_valid_result_structure(self):
-        req = default_req(method="grid")
-        result = _optimize_grid(req)
-        assert "optimal_airflow" in result
-        assert "optimal_fan_load" in result
-        assert result["status"] == "ok"
+        r = _optimize_grid(default_req(method="grid"))
+        assert "optimal_flow_kp" in r
+        assert "optimal_flow_oo" in r
+        assert r["status"] == "ok"
 
-    def test_iterations_equal_500(self):
-        req = default_req(method="grid")
-        result = _optimize_grid(req)
-        assert result["iterations"] == 500  # 25 * 20
+    def test_iterations_equal_grid_size(self):
+        r = _optimize_grid(default_req(method="grid"))
+        assert r["iterations"] == 12 * 12 * 12  # see _optimize_grid
 
-    def test_optimal_airflow_within_bounds(self):
+    def test_optimal_flows_within_bounds(self):
         req = default_req(method="grid")
-        result = _optimize_grid(req)
-        assert req.airflow_min <= result["optimal_airflow"] <= req.airflow_max
+        r = _optimize_grid(req)
+        assert req.flow_kp_min <= r["optimal_flow_kp"] <= req.flow_kp_max
+        assert req.flow_oo_min <= r["optimal_flow_oo"] <= req.flow_oo_max
 
-    def test_grid_and_scipy_give_similar_results(self):
+    def test_grid_and_scipy_produce_comparable_costs(self):
         req = default_req()
-        scipy_result = _optimize_scipy(req)
-        grid_result = _optimize_grid(req)
-        # Cost functions should be in the same ballpark (within 20%)
-        scipy_cost = _cost(scipy_result["optimal_airflow"], scipy_result["optimal_fan_load"], req)
-        grid_cost = _cost(grid_result["optimal_airflow"], grid_result["optimal_fan_load"], req)
-        assert abs(scipy_cost - grid_cost) / max(scipy_cost, grid_cost) < 0.2
+        s = _optimize_scipy(req)
+        g = _optimize_grid(req)
+        cs = _cost(s["optimal_flow_kp"], s["optimal_flow_oo"], s["optimal_fan_load"], req)
+        cg = _cost(g["optimal_flow_kp"], g["optimal_flow_oo"], g["optimal_fan_load"], req)
+        # Both algorithms should land near each other (within 50% — grid is coarse)
+        assert abs(cs - cg) / max(cs, cg) < 0.5

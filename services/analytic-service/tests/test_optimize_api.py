@@ -1,4 +1,4 @@
-"""Tests for /analytic/optimize and /analytic/runs endpoints."""
+"""Tests for /analytic/optimize and /analytic/runs against the new payload."""
 
 import pytest
 from tests.conftest import HEADERS
@@ -8,12 +8,15 @@ VALID_OPTIMIZE_PAYLOAD = {
     "method": "scipy",
     "fan_power_kw": 15.0,
     "energy_cost_kwh": 0.12,
-    "radiation_limit": 20.0,
-    "pressure_target": -120.0,
-    "airflow_min": 5000.0,
-    "airflow_max": 40000.0,
+    "pressure_kp_target": -10.0,
+    "pressure_oo_target": -17.0,
+    "dp_kp_oo_min": 2.0,
+    "flow_kp_min": 10.0,
+    "flow_kp_max": 28.0,
+    "flow_oo_min": 15.0,
+    "flow_oo_max": 40.0,
     "filter_efficiency": 0.999,
-    "current_radiation": 10.0,
+    "current_wind_speed": 2.0,
 }
 
 
@@ -31,23 +34,20 @@ class TestOptimizeEndpoint:
         mock_conn.fetchrow.return_value = {"id": 1}
         resp = client.post("/analytic/optimize", json=VALID_OPTIMIZE_PAYLOAD, headers=HEADERS)
         data = resp.json()
-        assert "method" in data
-        assert "optimal_airflow" in data
-        assert "optimal_fan_load" in data
-        assert "expected_radiation" in data
-        assert "expected_pressure" in data
-        assert "energy_kw" in data
-        assert "energy_cost_per_hour" in data
-        assert "safety_margin" in data
-        assert "status" in data
-        assert "iterations" in data
-        assert "id" in data
+        for k in (
+            "method", "optimal_flow_kp", "optimal_flow_oo", "optimal_fan_load",
+            "expected_pressure_kp", "expected_pressure_oo", "expected_dp_kp_oo",
+            "energy_kw", "energy_cost_per_hour", "safety_margin",
+            "status", "iterations", "id",
+        ):
+            assert k in data
 
-    def test_optimize_airflow_within_bounds(self, client, mock_conn):
+    def test_optimize_flows_within_bounds(self, client, mock_conn):
         mock_conn.fetchrow.return_value = {"id": 2}
         resp = client.post("/analytic/optimize", json=VALID_OPTIMIZE_PAYLOAD, headers=HEADERS)
         data = resp.json()
-        assert 5000.0 <= data["optimal_airflow"] <= 40000.0
+        assert 10.0 <= data["optimal_flow_kp"] <= 28.0
+        assert 15.0 <= data["optimal_flow_oo"] <= 40.0
 
     def test_optimize_fan_load_within_bounds(self, client, mock_conn):
         mock_conn.fetchrow.return_value = {"id": 3}
@@ -62,10 +62,10 @@ class TestOptimizeEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["method"] == "grid"
-        assert data["iterations"] == 500  # 25 * 20
+        assert data["iterations"] == 12 * 12 * 12
 
-    def test_optimize_invalid_airflow_range_returns400(self, client):
-        payload = {**VALID_OPTIMIZE_PAYLOAD, "airflow_min": 40000.0, "airflow_max": 5000.0}
+    def test_optimize_invalid_flow_kp_range_returns400(self, client):
+        payload = {**VALID_OPTIMIZE_PAYLOAD, "flow_kp_min": 28.0, "flow_kp_max": 10.0}
         resp = client.post("/analytic/optimize", json=payload, headers=HEADERS)
         assert resp.status_code == 400
 
@@ -82,7 +82,6 @@ class TestOptimizeEndpoint:
     def test_optimize_saves_run_to_db(self, client, mock_conn):
         mock_conn.fetchrow.return_value = {"id": 10}
         client.post("/analytic/optimize", json=VALID_OPTIMIZE_PAYLOAD, headers=HEADERS)
-        # Verify fetchrow was called (INSERT RETURNING id)
         mock_conn.fetchrow.assert_called()
 
 
@@ -103,7 +102,7 @@ class TestRunsEndpoint:
             "id": 1,
             "method": "scipy",
             "inputs": '{"method":"scipy","fan_power_kw":15.0}',
-            "result": '{"optimal_airflow":20000.0}',
+            "result": '{"optimal_flow_kp":18.0}',
             "status": "ok",
             "created_at": datetime(2024, 1, 1, tzinfo=timezone.utc),
             "finished_at": datetime(2024, 1, 1, 0, 0, 1, tzinfo=timezone.utc),
@@ -119,8 +118,6 @@ class TestRunsEndpoint:
     def test_runs_limit_default_50(self, client, mock_conn):
         mock_conn.fetch.return_value = []
         client.get("/analytic/runs", headers=HEADERS)
-        # The query should use limit=50 by default
         call_args = mock_conn.fetch.call_args
         assert call_args is not None
-        # The limit argument should appear somewhere in the call
         assert 50 in call_args.args or 50 in (call_args.kwargs or {}).values()

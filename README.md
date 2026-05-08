@@ -11,7 +11,7 @@ HTTP and WebSocket traffic for the browser.
 | ------------------- | ----- | ---------------- | ------------------------------------------------------------------------------ |
 | `auth-service`      | 8001  | `auth`           | Registration, login, JWT issuance / refresh / verify                          |
 | `user-service`      | 8002  | `profile`        | Per-user profile CRUD, admin user management                                   |
-| `data-service`      | 8003  | `sensors`        | Zones, sensors, readings; synthetic data generator                            |
+| `data-service`      | 8003  | `sensors`        | Zones, sensors, readings; replays real 2020-2024 dataset (`db/ventilation_history.csv`) |
 | `analytic-service`  | 8004  | `analytic`       | Aggregated stats, trends, ventilation optimization (`scipy` / grid search)    |
 | `config-service`    | 8005  | `configuration`  | Runtime parameters (limits, costs, efficiency)                                |
 | `discovery-service` | 8006  | `discovery`      | Registry of services + periodic `/health` probing                              |
@@ -34,11 +34,35 @@ The seeded admin account is:
 - username: `admin`
 - password: `admin123`
 
-Sensor data is ingested automatically in the background, so the dashboard
-always shows live readings without any manual action. End users see only the
-operational surfaces — overview, sensors, optimization, parameters, comms,
-profile. Administrators additionally see **Користувачі** and **Ролі** for
-managing accounts and access levels.
+### Sensor data
+
+The system runs on **real measurement data from a hermetic ventilation
+zone (КП / ОО / гермоустановка), aggregated from 2020–2024**. The raw
+Excel exports (`output_sum 2020 (1).xlsx` … `output_sum 2024.xlsx`) are
+preprocessed by `build_dataset.py` into:
+
+- `db/ventilation_history.csv`     — ~2500 normalized snapshots covering
+  24 sensor channels (wind, КП/ОО pressures, КП+/ОО± flows, ΔP variants,
+  ГУ wall pressures, σ pressures);
+- `db/ventilation_baselines.json`  — per-channel mean/std/p05/p50/p95.
+
+`docker-compose` mounts both files into the `data-service` and
+`analytic-service` containers. On startup, `data-service` seeds the
+readings table from the CSV (re-basing timestamps to "now") and then
+walks through the file row-by-row, replaying real readings as live data.
+`analytic-service` uses the baseline statistics to calibrate the
+prediction thresholds.
+
+To regenerate the dataset from the source spreadsheets, run:
+
+```bash
+pip install pandas openpyxl
+python build_dataset.py
+```
+
+End users see only the operational surfaces — overview, sensors,
+optimization, parameters, comms, profile. Administrators additionally
+see **Користувачі** and **Ролі** for managing accounts and access levels.
 
 ## Endpoints (via gateway, base `http://localhost:8000`)
 
@@ -72,14 +96,22 @@ admin from the **Ролі** tab (or via `PATCH /users/{id}/role`).
 - **Discovery** continuously polls `/health` on every registered service every
   15 seconds and stores the result in `discovery.services`.
 - **Optimization** in `analytic-service` minimizes the cost
-  `energy + radiation_penalty + pressure_penalty + airflow_penalty` either with
-  SciPy's L-BFGS-B or via a grid search, then persists each run.
+  `energy + Σ pressure_penalties + dp_kp_oo_penalty + flow_penalties`
+  over three control variables (`flow_kp`, `flow_oo`, `fan_load`) using
+  SciPy's L-BFGS-B or a grid search, then persists each run.
+- **Prediction** classifies the 9 safety-critical channels (КП/ОО pressure,
+  ΔP КП-ОО, КП+/ОО− flows, wind, three ГУ wall pressures) against
+  thresholds calibrated from the 2020-2024 dataset.
 
 ## Project layout
 
 ```
 .
-├── db/init.sql                # schemas + seed data
+├── build_dataset.py              # Excel → CSV + baselines preprocessor
+├── db/
+│   ├── init.sql                  # schemas + zone/sensor topology
+│   ├── ventilation_history.csv   # 2020-2024 real readings (replayed by data-service)
+│   └── ventilation_baselines.json
 ├── docker-compose.yml
 ├── frontend/                  # React + Vite + Nginx
 │   ├── src/

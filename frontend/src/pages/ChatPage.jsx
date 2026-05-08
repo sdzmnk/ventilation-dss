@@ -140,7 +140,7 @@ export default function ChatPage() {
           ) : (
             <>
               <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Сотрудники</h3>
+                <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Співробітники</h3>
                 <button className="text-xl" onClick={() => setShowUsers(false)}>✕</button>
               </div>
               <div className="flex-1 overflow-y-auto p-2 space-y-1">

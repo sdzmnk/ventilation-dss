@@ -4,18 +4,32 @@ import {
   ShieldCheck,
   AlertOctagon,
   Wind,
-  Thermometer,
+  Gauge,
   TrendingUp,
   Minus,
   List,
   BrainCircuit,
   ChevronDown,
   ChevronUp,
+  Compass,
 } from "lucide-react";
 import { api } from "../api/client.js";
 import { useI18n } from "../i18n/i18n.jsx";
 import VentilationScheme from "../components/VentilationScheme.jsx";
 import TrendChart from "../components/TrendChart.jsx";
+
+// All channels the prediction endpoint understands — backend ignores
+// the ones it doesn't weight, so we just pass everything we have.
+const PREDICT_CHANNELS = [
+  "pressure_kp", "pressure_oo",
+  "dp_kp_oo", "dp_kp_os", "dp_oo_os_8", "dp_oo_os_9",
+  "dp_kp_oo_by", "dp_kp_oo_bz", "dp_kp_oo_ca",
+  "flow_kp_in", "flow_oo_out", "flow_oo_in",
+  "wind_speed",
+  "gu_pressure_west_wall", "gu_pressure_east_wall", "gu_pressure_cyl_wall",
+  "gu_pressure_west_gap",  "gu_pressure_east_gap",  "gu_pressure_vsro",
+  "gu_sigma_008", "gu_sigma_009", "gu_sigma_kp_os",
+];
 
 export default function DashboardPage() {
   const { t } = useI18n();
@@ -41,10 +55,9 @@ export default function DashboardPage() {
       const src = currentStats ?? stats;
       const byT = Object.fromEntries(src.map((s) => [s.sensor_type, s]));
       const params = {};
-      if (byT.radiation)   params.radiation   = byT.radiation.mean;
-      if (byT.pressure)    params.pressure    = byT.pressure.mean;
-      if (byT.airflow)     params.airflow     = byT.airflow.mean;
-      if (byT.temperature) params.temperature = byT.temperature.mean;
+      for (const k of PREDICT_CHANNELS) {
+        if (byT[k]) params[k] = byT[k].mean;
+      }
       const r = await api.get("/analytic/predict", { params });
       setPrediction(r.data);
     } catch { /* silent */ }
@@ -60,8 +73,8 @@ export default function DashboardPage() {
   }, []);
 
   const byType = Object.fromEntries(stats.map((s) => [s.sensor_type, s]));
-  const radMax = byType.radiation?.max ?? 0;
-  const overall = radMax > 18 ? "warn" : "ok";
+  const dpKpOo = byType.dp_kp_oo?.mean ?? null;
+  const overall = (dpKpOo !== null && dpKpOo < 0) ? "warn" : "ok";
 
   const cards = [
     {
@@ -72,29 +85,62 @@ export default function DashboardPage() {
       hint: t("updatedNow"),
     },
     {
-      label: t("radiation"),
-      value: byType.radiation ? `${byType.radiation.mean.toFixed(1)} мкЗв/год` : "—",
+      label: t("dp_kp_oo"),
+      value: byType.dp_kp_oo ? `${byType.dp_kp_oo.mean.toFixed(2)} Па` : "—",
       icon: AlertOctagon,
-      tone: byType.radiation && byType.radiation.mean > 12 ? "warn" : "ok",
-      hint: byType.radiation ? `max ${byType.radiation.max.toFixed(1)} · n=${byType.radiation.count}` : t("liveData"),
+      tone: byType.dp_kp_oo && byType.dp_kp_oo.mean < 0 ? "warn" : "ok",
+      hint: byType.dp_kp_oo
+        ? `min ${byType.dp_kp_oo.min.toFixed(1)} · max ${byType.dp_kp_oo.max.toFixed(1)}`
+        : t("liveData"),
     },
     {
-      label: t("airflow"),
-      value: byType.airflow ? `${(byType.airflow.mean / 1000).toFixed(1)} тис. м³/год` : "—",
+      label: t("pressure_kp"),
+      value: byType.pressure_kp ? `${byType.pressure_kp.mean.toFixed(1)} Па` : "—",
+      icon: Gauge,
+      tone: byType.pressure_kp && Math.abs(byType.pressure_kp.mean) > 50 ? "warn" : "info",
+      hint: byType.pressure_kp ? `n=${byType.pressure_kp.count}` : t("liveData"),
+    },
+    {
+      label: t("flow_kp_in"),
+      value: byType.flow_kp_in ? `${byType.flow_kp_in.mean.toFixed(1)} тис. м³/год` : "—",
       icon: Wind,
       tone: "info",
       hint: t("liveData"),
     },
+  ];
+
+  const meteoCards = [
     {
-      label: t("temperature"),
-      value: byType.temperature ? `${byType.temperature.mean.toFixed(1)} °C` : "—",
-      icon: Thermometer,
+      label: t("wind_speed"),
+      value: byType.wind_speed ? `${byType.wind_speed.mean.toFixed(2)} м/с` : "—",
+      icon: Wind,
+      tone: byType.wind_speed && byType.wind_speed.mean > 8 ? "warn" : "neutral",
+      hint: byType.wind_speed ? `max ${byType.wind_speed.max.toFixed(1)}` : "",
+    },
+    {
+      label: t("wind_direction"),
+      value: byType.wind_direction ? `${byType.wind_direction.mean.toFixed(0)}°` : "—",
+      icon: Compass,
       tone: "neutral",
-      hint: t("liveData"),
+      hint: "",
+    },
+    {
+      label: t("pressure_oo"),
+      value: byType.pressure_oo ? `${byType.pressure_oo.mean.toFixed(1)} Па` : "—",
+      icon: Gauge,
+      tone: "info",
+      hint: byType.pressure_oo ? `min ${byType.pressure_oo.min.toFixed(1)}` : "",
+    },
+    {
+      label: t("flow_oo_out"),
+      value: byType.flow_oo_out ? `${byType.flow_oo_out.mean.toFixed(1)} тис. м³/год` : "—",
+      icon: Wind,
+      tone: "info",
+      hint: "",
     },
   ];
 
-  const events = buildEvents(latest);
+  const events = buildEvents(latest, t);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
@@ -107,6 +153,10 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {cards.map((c) => <StatCard key={c.label} {...c} />)}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        {meteoCards.map((c) => <StatCard key={c.label} {...c} />)}
       </div>
 
       {prediction && <PredictCard data={prediction} />}
@@ -122,11 +172,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="card flex flex-col min-h-[420px]">
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
-            <List className="w-4 h-4 text-slate-400" />
-            <h3 className="font-semibold text-slate-900 dark:text-white">{t("events")}</h3>
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <List className="w-4 h-4 text-slate-400" />
+              <h3 className="font-semibold text-slate-900 dark:text-white">{t("events")}</h3>
+            </div>
+            <span className="text-xs text-slate-400">{events.length}</span>
           </div>
-          <div className="flex-1 p-4 overflow-y-auto space-y-2">
+          <div className="flex-1 p-4 overflow-y-auto space-y-2.5">
             {events.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-center py-10">
                 <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3 border border-slate-200 dark:border-slate-700">
@@ -136,19 +189,39 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-500 mt-1 max-w-[220px]">{t("awaitingData")}</p>
               </div>
             )}
-            {events.map((e, i) => (
-              <div key={i} className={`p-3 rounded-lg text-sm border ${
-                e.tone === "warn"
-                  ? "bg-amber-50 border-amber-200 dark:bg-amber-500/5 dark:border-amber-500/20"
-                  : "bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700"
-              }`}>
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-slate-800 dark:text-slate-100">{e.title}</div>
-                  <div className="text-xs text-slate-500">{e.time}</div>
+            {events.map((e, i) => {
+              const toneClass = {
+                bad:  "bg-red-50 border-red-200 dark:bg-red-500/5 dark:border-red-500/20",
+                warn: "bg-amber-50 border-amber-200 dark:bg-amber-500/5 dark:border-amber-500/20",
+                info: "bg-blue-50 border-blue-200 dark:bg-blue-500/5 dark:border-blue-500/20",
+                ok:   "bg-emerald-50 border-emerald-200 dark:bg-emerald-500/5 dark:border-emerald-500/20",
+              }[e.tone] || "bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700";
+              const dotClass = {
+                bad:  "bg-red-500",
+                warn: "bg-amber-500",
+                info: "bg-blue-500",
+                ok:   "bg-emerald-500",
+              }[e.tone] || "bg-slate-400";
+              return (
+                <div key={i} className={`p-3 rounded-lg text-sm border ${toneClass}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2 min-w-0">
+                      <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`} />
+                      <div className="min-w-0">
+                        <div className="font-medium text-slate-800 dark:text-slate-100 truncate">{e.title}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{e.text}</div>
+                        {e.zone && (
+                          <div className="text-[11px] text-slate-500 dark:text-slate-500 mt-0.5">
+                            <span className="font-medium">{e.zone}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500 whitespace-nowrap">{e.time}</div>
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500 mt-1">{e.text}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -158,10 +231,10 @@ export default function DashboardPage() {
           <h3 className="font-semibold text-slate-900 dark:text-white">{t("trends")}</h3>
         </div>
         <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-          <TrendChart sensorType="radiation" label={t("radiation")} color="#f59e0b" />
-          <TrendChart sensorType="pressure" label={t("pressure")} color="#60a5fa" />
-          <TrendChart sensorType="airflow" label={t("airflow")} color="#34d399" />
-          <TrendChart sensorType="temperature" label={t("temperature")} color="#f472b6" />
+          <TrendChart sensorType="dp_kp_oo"    label={t("dp_kp_oo")}    color="#f59e0b" />
+          <TrendChart sensorType="pressure_kp" label={t("pressure_kp")} color="#60a5fa" />
+          <TrendChart sensorType="flow_kp_in"  label={t("flow_kp_in")}  color="#34d399" />
+          <TrendChart sensorType="wind_speed"  label={t("wind_speed")}  color="#a78bfa" />
         </div>
       </div>
     </div>
@@ -226,7 +299,6 @@ function PredictCard({ data }) {
       </div>
 
       <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
-        {/* Status + Risk */}
         <div className="flex flex-col gap-3">
           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border font-semibold text-sm w-fit ${s.bg} ${s.text} ${s.border}`}>
             <span className={`w-2 h-2 rounded-full ${s.text.replace("text-", "bg-")}`} />
@@ -242,7 +314,6 @@ function PredictCard({ data }) {
           </div>
         </div>
 
-        {/* Probabilities */}
         <div className="flex flex-col gap-3">
           <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">{t("probabilities")}</p>
           {probs.map(({ key, val, color }) => (
@@ -258,7 +329,6 @@ function PredictCard({ data }) {
           ))}
         </div>
 
-        {/* Recommendation */}
         <div className="md:col-span-1">
           <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">{t("recommendation")}</p>
           <div className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
@@ -281,28 +351,128 @@ function PredictCard({ data }) {
   );
 }
 
-function buildEvents(latest) {
+// Order matters: more severe events appear first.
+const EVENT_RULES = [
+  {
+    type: "dp_kp_oo",
+    test: (v) => v < 0,
+    tone: "bad",
+    title: "Зворотний перепад КП-ОО",
+    fmt: (v, u) => `Δp = ${v.toFixed(2)} ${u} — ризик зворотного потоку повітря`,
+  },
+  {
+    type: "dp_kp_oo",
+    test: (v) => v >= 0 && v < 2,
+    tone: "warn",
+    title: "Низький перепад КП-ОО",
+    fmt: (v, u) => `Δp = ${v.toFixed(2)} ${u} — менше резерву безпеки 2 ${u}`,
+  },
+  {
+    type: "wind_speed",
+    test: (v) => v > 8,
+    tone: "warn",
+    title: "Сильний вітер",
+    fmt: (v) => `${v.toFixed(1)} м/с — можливий вплив на герметичність`,
+  },
+  {
+    type: "pressure_kp",
+    test: (v) => v < -50 || v > 15,
+    tone: "warn",
+    title: "Тиск КП поза робочим діапазоном",
+    fmt: (v, u) => `${v.toFixed(1)} ${u} (норма −50…15 ${u})`,
+  },
+  {
+    type: "pressure_oo",
+    test: (v) => v < -60 || v > 15,
+    tone: "warn",
+    title: "Тиск ОО поза робочим діапазоном",
+    fmt: (v, u) => `${v.toFixed(1)} ${u} (норма −60…15 ${u})`,
+  },
+  {
+    type: "gu_pressure_west_wall",
+    test: (v) => Math.abs(v) > 40,
+    tone: "warn",
+    title: "Перевищено тиск на західній стінці ГУ",
+    fmt: (v, u) => `${v.toFixed(1)} ${u}`,
+  },
+  {
+    type: "gu_pressure_east_wall",
+    test: (v) => Math.abs(v) > 40,
+    tone: "warn",
+    title: "Перевищено тиск на східній стінці ГУ",
+    fmt: (v, u) => `${v.toFixed(1)} ${u}`,
+  },
+  {
+    type: "gu_pressure_cyl_wall",
+    test: (v) => Math.abs(v) > 40,
+    tone: "warn",
+    title: "Перевищено тиск на циліндричній стінці ГУ",
+    fmt: (v, u) => `${v.toFixed(1)} ${u}`,
+  },
+  {
+    type: "flow_kp_in",
+    test: (v) => v < 8,
+    tone: "warn",
+    title: "Низька витрата припливу КП+",
+    fmt: (v) => `${v.toFixed(2)} тис. м³/год — нижче робочого мінімуму`,
+  },
+  {
+    type: "flow_oo_out",
+    test: (v) => v < 12,
+    tone: "warn",
+    title: "Низька витяжка ОО−",
+    fmt: (v) => `${v.toFixed(2)} тис. м³/год — нижче робочого мінімуму`,
+  },
+];
+
+function buildEvents(latest, t) {
+  const fmtTime = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  // Index latest by type so a single iteration of rules is enough
+  const byType = Object.fromEntries(latest.map((r) => [r.sensor_type, r]));
+
   const out = [];
-  for (const r of latest) {
-    if (r.sensor_type === "radiation" && typeof r.value === "number" && r.value > 16) {
+  for (const rule of EVENT_RULES) {
+    const r = byType[rule.type];
+    if (!r || typeof r.value !== "number") continue;
+    if (!rule.test(r.value)) continue;
+    out.push({
+      tone: rule.tone,
+      title: rule.title,
+      text: rule.fmt(r.value, r.unit || ""),
+      zone: r.zone_name || r.zone_code,
+      time: fmtTime(r.measured_at),
+    });
+  }
+
+  // Always lead with a positive heartbeat when nothing alarming is happening,
+  // so the panel never looks "empty / broken".
+  if (out.length === 0 && latest.length) {
+    const dp = byType.dp_kp_oo;
+    const wind = byType.wind_speed;
+    if (dp && typeof dp.value === "number") {
       out.push({
-        tone: "warn",
-        title: `Підвищена радіація · ${r.zone_name || r.zone_code}`,
-        text: `${r.sensor_code}: ${r.value.toFixed(1)} ${r.unit}`,
-        time: new Date(r.measured_at).toLocaleTimeString(),
+        tone: "ok",
+        title: "Система у нормі",
+        text: `Перепад КП-ОО ${dp.value.toFixed(2)} ${dp.unit || "Па"} — у безпечному діапазоні`,
+        zone: dp.zone_name || dp.zone_code,
+        time: fmtTime(dp.measured_at),
+      });
+    }
+    if (wind && typeof wind.value === "number") {
+      out.push({
+        tone: "info",
+        title: "Метеоумови",
+        text: `Вітер ${wind.value.toFixed(1)} м/с, напрям ${(byType.wind_direction?.value ?? 0).toFixed(0)}°`,
+        zone: wind.zone_name || wind.zone_code,
+        time: fmtTime(wind.measured_at),
       });
     }
   }
-  if (latest.length && out.length === 0) {
-    const r = latest[0];
-    out.push({
-      tone: "info",
-      title: "Оновлення сенсорів",
-      text: `${r.zone_name || r.zone_code} · ${r.sensor_code}: ${
-        typeof r.value === "number" ? r.value.toFixed(1) : "—"
-      } ${r.unit || ""}`,
-      time: r.measured_at ? new Date(r.measured_at).toLocaleTimeString() : "",
-    });
-  }
-  return out.slice(0, 8);
+
+  return out.slice(0, 6);
 }
