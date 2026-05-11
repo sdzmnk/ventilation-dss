@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from ml.data_preprocess import VentilationPreprocessingService  # noqa: E402
 from ml.hvac_service import HVACVentilationModelService  # noqa: E402
+from ml.recommender import Recommender  # noqa: E402
 from ml.weight_service import WeightService  # noqa: E402
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
@@ -58,6 +59,7 @@ app.add_middleware(
 pool: Optional[asyncpg.Pool] = None
 _BASELINES: dict[str, dict] = {}
 model_service: Optional[HVACVentilationModelService] = None
+recommender: Optional[Recommender] = None
 
 
 async def get_pool() -> asyncpg.Pool:
@@ -149,11 +151,12 @@ def _load_baselines() -> None:
 
 
 def _train_model() -> None:
-    global model_service
+    global model_service, recommender
     model_service = HVACVentilationModelService(baselines=_BASELINES)
+    recommender = Recommender()
 
     if not os.path.exists(DATASET_CSV):
-        print(f"[analytic-service] dataset CSV not found at {DATASET_CSV} — model untrained")
+        print(f"[analytic-service] dataset CSV not found at {DATASET_CSV} — models untrained")
         return
 
     raw = pd.read_csv(DATASET_CSV)
@@ -163,16 +166,17 @@ def _train_model() -> None:
 
     if model_service.is_trained:
         acc = model_service.metrics.get("accuracy")
-        print(f"[analytic-service] model ready: accuracy={acc} classes={list(model_service.encoder.classes_)}")
+        print(f"[analytic-service] XGBoost ready: accuracy={acc} classes={list(model_service.encoder.classes_)}")
+    print(f"[analytic-service] Recommender LLM {'enabled' if recommender.enabled else 'disabled (using data-driven fallback)'}")
 
 
 @app.get("/health")
 async def health():
-    trained = bool(model_service and model_service.is_trained)
     return {
         "status": "ok",
         "service": "analytic-service",
-        "model_trained": trained,
+        "xgboost_trained": bool(model_service and model_service.is_trained),
+        "recommender_enabled": bool(recommender and recommender.enabled),
     }
 
 
@@ -243,58 +247,51 @@ async def predict(
         cls: ml_out["probabilities"].get(cls, 0.0)
         for cls in ("OK", "WARNING", "CRITICAL")
     }
+    prediction_data = {
+        "status": ml_out["status"],
+        "risk_score": ml_out["risk_score"],
+        "confidence": ml_out["confidence"],
+        "probabilities": {k: round(float(v), 4) for k, v in probabilities.items()},
+        "top_channels": model_service.top_channels[:5],
+    }
     return {
-        "prediction_data": {
-            "status": ml_out["status"],
-            "risk_score": ml_out["risk_score"],
-            "confidence": ml_out["confidence"],
-            "probabilities": {k: round(float(v), 4) for k, v in probabilities.items()},
-            "top_channels": model_service.top_channels[:5],
-        },
+        "prediction_data": prediction_data,
         "inputs": {k: round(float(v), 3) for k, v in given.items()},
-        "recommendation": _build_recommendation(ml_out["status"], ml_out["confidence"], given),
+        "recommendation": _build_recommendation(prediction_data, given),
     }
 
 
-def _build_recommendation(status: str, confidence: float, v: dict) -> str:
-    """Текст рекомендації будується строго з виходу моделі:
-    шаблон вибирається по status; список ключових каналів береться з
-    feature_importance натренованої моделі (топ-5 сирих каналів),
-    значення — поточні з вхідного запиту.
+def _build_recommendation(prediction_data: dict, inputs: dict) -> str:
+    """Рекомендація формується LLM-ом (Recommender) на основі XGBoost output.
+    Якщо LLM не сконфігуровано — повертаємо стислий data-driven текст
+    із топ-каналів моделі та їхніх поточних значень.
     """
-    conf_pct = f"{confidence * 100:.2f}%"
-    drivers = _describe_top_features(v, top_n=5)
+    drivers = _describe_top_features(inputs, top_n=5)
+
+    if recommender and recommender.enabled:
+        payload = {**prediction_data, "key_channels": drivers}
+        try:
+            advice = recommender.generate_advice(payload)
+            if advice and advice.strip():
+                return advice.strip()
+        except Exception as exc:  # pragma: no cover - network errors
+            print(f"[analytic-service] Recommender failed, using fallback: {exc}")
+
+    return _fallback_recommendation(prediction_data, drivers)
+
+
+def _fallback_recommendation(prediction_data: dict, drivers: list[str]) -> str:
+    status = prediction_data["status"]
+    confidence = prediction_data.get("confidence") or 0.0
+    risk = prediction_data.get("risk_score")
+    conf_pct = f"{confidence * 100:.1f}%"
     drivers_text = "; ".join(drivers) if drivers else "немає даних про важливі канали"
-
-    if status == "OK":
-        return (
-            f"Вентиляційна система працює в межах норми (впевненість {conf_pct}).\n"
-            f"Ключові канали моделі: {drivers_text}.\n\n"
-            "Рекомендація оператору: продовжувати штатний моніторинг кожні 30 хвилин, "
-            "контролювати показання СКО тиску ГУ та зовнішній вітер. "
-            "У разі стійкого зменшення перепаду КП-ОО — перевірити стан фільтрів Ф-101/Ф-102 "
-            "та режим роботи припливних вентиляторів."
-        )
-
-    if status == "WARNING":
-        return (
-            f"Виявлено відхилення параметрів (впевненість {conf_pct}).\n"
-            f"Ключові канали моделі: {drivers_text}.\n\n"
-            "Необхідні дії:\n"
-            "1. Перевірити стан HEPA-фільтру Ф-102 — типова причина зменшення перепаду КП-ОО.\n"
-            "2. Скоригувати завантаження вентилятора М-1 (приплив КП) на ±10% та перевірити стабілізацію тиску КП.\n"
-            "3. Збільшити частоту реєстрації показань ГУ Тиск (західна/східна стінки) до 1 хв.\n"
-            "4. Повідомити інженерну службу та підготувати резервний вентилятор М-3."
-        )
-
+    status_uk = {"OK": "у нормі", "WARNING": "відхилення", "CRITICAL": "критичний стан"}.get(status, status)
+    risk_text = f", індекс безпеки {risk}" if risk is not None else ""
     return (
-        f"КРИТИЧНА СИТУАЦІЯ: вентиляційна система потребує негайного втручання (впевненість {conf_pct}).\n"
-        f"Ключові канали моделі: {drivers_text}.\n\n"
-        "Аварійне реагування:\n"
-        "• Активувати аварійний режим витяжної вентиляції (М-1 + М-2 + М-3 одночасно).\n"
-        "• Закрити герметичні засувки К-1/К-2 у разі від'ємного перепаду КП-ОО — це прямий ризик зворотного потоку.\n"
-        "• Якщо перевищено |тиск ГУ| на стінках — призупинити будь-які роботи у гермозоні до стабілізації.\n"
-        "• Повідомити начальника зміни. Відновлення штатного режиму — лише після підтвердження інженерною службою."
+        f"Стан системи: {status_uk} (впевненість {conf_pct}{risk_text}).\n"
+        f"Ключові канали моделі: {drivers_text}.\n"
+        f"Рекомендовано звірити перелічені канали з робочими діапазонами та зафіксувати показання."
     )
 
 

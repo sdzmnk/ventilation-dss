@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   ShieldCheck,
@@ -7,7 +7,6 @@ import {
   Gauge,
   TrendingUp,
   Minus,
-  List,
   BrainCircuit,
   ChevronDown,
   ChevronUp,
@@ -31,28 +30,28 @@ const PREDICT_CHANNELS = [
   "gu_sigma_008", "gu_sigma_009", "gu_sigma_kp_os",
 ];
 
+const STATS_REFRESH_MS   = 10_000;  
+const PREDICT_REFRESH_MS = 18_000_000;
+
 export default function DashboardPage() {
   const { t } = useI18n();
-  const [latest, setLatest] = useState([]);
   const [stats, setStats] = useState([]);
   const [prediction, setPrediction] = useState(null);
+  const statsRef = useRef([]);
 
   const refresh = async () => {
     try {
-      const [a, b] = await Promise.all([
-        api.get("/readings/latest"),
-        api.get("/analytic/stats", { params: { hours: 24 } }),
-      ]);
-      setLatest(a.data || []);
-      const s = b.data || [];
+      const { data } = await api.get("/analytic/stats", { params: { hours: 24 } });
+      const s = data || [];
       setStats(s);
+      statsRef.current = s;
       return s;
     } catch { return null; }
   };
 
   const refreshPredict = async (currentStats) => {
     try {
-      const src = currentStats ?? stats;
+      const src = currentStats ?? statsRef.current;
       const byT = Object.fromEntries(src.map((s) => [s.sensor_type, s]));
       const params = {};
       for (const k of PREDICT_CHANNELS) {
@@ -65,11 +64,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     refresh().then((s) => { if (s) refreshPredict(s); });
-    const id1 = setInterval(async () => {
-      const s = await refresh();
-      if (s) refreshPredict(s);
-    }, 10000);
-    return () => clearInterval(id1);
+    const statsTimer = setInterval(refresh, STATS_REFRESH_MS);
+    const predictTimer = setInterval(() => {
+      if (statsRef.current.length) refreshPredict(statsRef.current);
+    }, PREDICT_REFRESH_MS);
+    return () => {
+      clearInterval(statsTimer);
+      clearInterval(predictTimer);
+    };
   }, []);
 
   const byType = Object.fromEntries(stats.map((s) => [s.sensor_type, s]));
@@ -90,7 +92,7 @@ export default function DashboardPage() {
       icon: AlertOctagon,
       tone: byType.dp_kp_oo && byType.dp_kp_oo.mean < 0 ? "warn" : "ok",
       hint: byType.dp_kp_oo
-        ? `min ${byType.dp_kp_oo.min.toFixed(1)} · max ${byType.dp_kp_oo.max.toFixed(1)}`
+        ? `${t("minLabel")} ${byType.dp_kp_oo.min.toFixed(1)} · ${t("maxLabel")} ${byType.dp_kp_oo.max.toFixed(1)}`
         : t("liveData"),
     },
     {
@@ -98,7 +100,7 @@ export default function DashboardPage() {
       value: byType.pressure_kp ? `${byType.pressure_kp.mean.toFixed(1)} Па` : "—",
       icon: Gauge,
       tone: byType.pressure_kp && Math.abs(byType.pressure_kp.mean) > 50 ? "warn" : "info",
-      hint: byType.pressure_kp ? `n=${byType.pressure_kp.count}` : t("liveData"),
+      hint: byType.pressure_kp ? `${t("countLabel")}=${byType.pressure_kp.count}` : t("liveData"),
     },
     {
       label: t("flow_kp_in"),
@@ -115,7 +117,7 @@ export default function DashboardPage() {
       value: byType.wind_speed ? `${byType.wind_speed.mean.toFixed(2)} м/с` : "—",
       icon: Wind,
       tone: byType.wind_speed && byType.wind_speed.mean > 8 ? "warn" : "neutral",
-      hint: byType.wind_speed ? `max ${byType.wind_speed.max.toFixed(1)}` : "",
+      hint: byType.wind_speed ? `${t("maxLabel")} ${byType.wind_speed.max.toFixed(1)}` : "",
     },
     {
       label: t("wind_direction"),
@@ -129,7 +131,7 @@ export default function DashboardPage() {
       value: byType.pressure_oo ? `${byType.pressure_oo.mean.toFixed(1)} Па` : "—",
       icon: Gauge,
       tone: "info",
-      hint: byType.pressure_oo ? `min ${byType.pressure_oo.min.toFixed(1)}` : "",
+      hint: byType.pressure_oo ? `${t("minLabel")} ${byType.pressure_oo.min.toFixed(1)}` : "",
     },
     {
       label: t("flow_oo_out"),
@@ -140,7 +142,6 @@ export default function DashboardPage() {
     },
   ];
 
-  const events = buildEvents(latest, t);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
@@ -161,68 +162,12 @@ export default function DashboardPage() {
 
       {prediction && <PredictCard data={prediction} />}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 card overflow-hidden flex flex-col min-h-[420px]">
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-            <h3 className="font-semibold text-slate-900 dark:text-white">{t("scheme")}</h3>
-          </div>
-          <div className="flex-1 bg-slate-50 dark:bg-[#0b1120]">
-            <VentilationScheme />
-          </div>
+      <div className="card overflow-hidden flex flex-col min-h-[420px]">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+          <h3 className="font-semibold text-slate-900 dark:text-white">{t("scheme")}</h3>
         </div>
-
-        <div className="card flex flex-col min-h-[420px]">
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <List className="w-4 h-4 text-slate-400" />
-              <h3 className="font-semibold text-slate-900 dark:text-white">{t("events")}</h3>
-            </div>
-            <span className="text-xs text-slate-400">{events.length}</span>
-          </div>
-          <div className="flex-1 p-4 overflow-y-auto space-y-2.5">
-            {events.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center py-10">
-                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3 border border-slate-200 dark:border-slate-700">
-                  <Activity className="w-5 h-5 text-slate-400" />
-                </div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{t("noEvents")}</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-[220px]">{t("awaitingData")}</p>
-              </div>
-            )}
-            {events.map((e, i) => {
-              const toneClass = {
-                bad:  "bg-red-50 border-red-200 dark:bg-red-500/5 dark:border-red-500/20",
-                warn: "bg-amber-50 border-amber-200 dark:bg-amber-500/5 dark:border-amber-500/20",
-                info: "bg-blue-50 border-blue-200 dark:bg-blue-500/5 dark:border-blue-500/20",
-                ok:   "bg-emerald-50 border-emerald-200 dark:bg-emerald-500/5 dark:border-emerald-500/20",
-              }[e.tone] || "bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700";
-              const dotClass = {
-                bad:  "bg-red-500",
-                warn: "bg-amber-500",
-                info: "bg-blue-500",
-                ok:   "bg-emerald-500",
-              }[e.tone] || "bg-slate-400";
-              return (
-                <div key={i} className={`p-3 rounded-lg text-sm border ${toneClass}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-2 min-w-0">
-                      <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`} />
-                      <div className="min-w-0">
-                        <div className="font-medium text-slate-800 dark:text-slate-100 truncate">{e.title}</div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">{e.text}</div>
-                        {e.zone && (
-                          <div className="text-[11px] text-slate-500 dark:text-slate-500 mt-0.5">
-                            <span className="font-medium">{e.zone}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-xs text-slate-500 whitespace-nowrap">{e.time}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        <div className="flex-1 bg-slate-50 dark:bg-[#0b1120]">
+          <VentilationScheme stats={stats} />
         </div>
       </div>
 
@@ -330,149 +275,126 @@ function PredictCard({ data }) {
         </div>
 
         <div className="md:col-span-1">
-          <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">{t("recommendation")}</p>
-          <div className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-            {open
-              ? <span className="whitespace-pre-line">{recommendation}</span>
-              : <span>{recommendation.split("\n")[0].slice(0, 180)}{recommendation.length > 180 ? "…" : ""}</span>
-            }
-          </div>
-          {recommendation.length > 180 && (
-            <button
-              onClick={() => setOpen(v => !v)}
-              className="mt-2 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              {open ? <><ChevronUp className="w-3 h-3" /> {t("showLess")}</> : <><ChevronDown className="w-3 h-3" /> {t("showMore")}</>}
-            </button>
-          )}
+          <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">{t("recommendation")}</p>
+          <RecommendationView text={recommendation} open={open} setOpen={setOpen} t={t} />
         </div>
       </div>
     </div>
   );
 }
 
-// Order matters: more severe events appear first.
-const EVENT_RULES = [
-  {
-    type: "dp_kp_oo",
-    test: (v) => v < 0,
-    tone: "bad",
-    title: "Зворотний перепад КП-ОО",
-    fmt: (v, u) => `Δp = ${v.toFixed(2)} ${u} — ризик зворотного потоку повітря`,
-  },
-  {
-    type: "dp_kp_oo",
-    test: (v) => v >= 0 && v < 2,
-    tone: "warn",
-    title: "Низький перепад КП-ОО",
-    fmt: (v, u) => `Δp = ${v.toFixed(2)} ${u} — менше резерву безпеки 2 ${u}`,
-  },
-  {
-    type: "wind_speed",
-    test: (v) => v > 8,
-    tone: "warn",
-    title: "Сильний вітер",
-    fmt: (v) => `${v.toFixed(1)} м/с — можливий вплив на герметичність`,
-  },
-  {
-    type: "pressure_kp",
-    test: (v) => v < -50 || v > 15,
-    tone: "warn",
-    title: "Тиск КП поза робочим діапазоном",
-    fmt: (v, u) => `${v.toFixed(1)} ${u} (норма −50…15 ${u})`,
-  },
-  {
-    type: "pressure_oo",
-    test: (v) => v < -60 || v > 15,
-    tone: "warn",
-    title: "Тиск ОО поза робочим діапазоном",
-    fmt: (v, u) => `${v.toFixed(1)} ${u} (норма −60…15 ${u})`,
-  },
-  {
-    type: "gu_pressure_west_wall",
-    test: (v) => Math.abs(v) > 40,
-    tone: "warn",
-    title: "Перевищено тиск на західній стінці ГУ",
-    fmt: (v, u) => `${v.toFixed(1)} ${u}`,
-  },
-  {
-    type: "gu_pressure_east_wall",
-    test: (v) => Math.abs(v) > 40,
-    tone: "warn",
-    title: "Перевищено тиск на східній стінці ГУ",
-    fmt: (v, u) => `${v.toFixed(1)} ${u}`,
-  },
-  {
-    type: "gu_pressure_cyl_wall",
-    test: (v) => Math.abs(v) > 40,
-    tone: "warn",
-    title: "Перевищено тиск на циліндричній стінці ГУ",
-    fmt: (v, u) => `${v.toFixed(1)} ${u}`,
-  },
-  {
-    type: "flow_kp_in",
-    test: (v) => v < 8,
-    tone: "warn",
-    title: "Низька витрата припливу КП+",
-    fmt: (v) => `${v.toFixed(2)} тис. м³/год — нижче робочого мінімуму`,
-  },
-  {
-    type: "flow_oo_out",
-    test: (v) => v < 12,
-    tone: "warn",
-    title: "Низька витяжка ОО−",
-    fmt: (v) => `${v.toFixed(2)} тис. м³/год — нижче робочого мінімуму`,
-  },
-];
+// Зніми markdown-обгортки, які LLM любить дописувати (**...**, __...__, `...`).
+const stripMarkdown = (s) =>
+  s
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "$1")
+    .replace(/`(.+?)`/g, "$1")
+    .trim();
 
-function buildEvents(latest, t) {
-  const fmtTime = (iso) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    return d.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
-  };
-
-  // Index latest by type so a single iteration of rules is enough
-  const byType = Object.fromEntries(latest.map((r) => [r.sensor_type, r]));
-
-  const out = [];
-  for (const rule of EVENT_RULES) {
-    const r = byType[rule.type];
-    if (!r || typeof r.value !== "number") continue;
-    if (!rule.test(r.value)) continue;
-    out.push({
-      tone: rule.tone,
-      title: rule.title,
-      text: rule.fmt(r.value, r.unit || ""),
-      zone: r.zone_name || r.zone_code,
-      time: fmtTime(r.measured_at),
-    });
-  }
-
-  // Always lead with a positive heartbeat when nothing alarming is happening,
-  // so the panel never looks "empty / broken".
-  if (out.length === 0 && latest.length) {
-    const dp = byType.dp_kp_oo;
-    const wind = byType.wind_speed;
-    if (dp && typeof dp.value === "number") {
-      out.push({
-        tone: "ok",
-        title: "Система у нормі",
-        text: `Перепад КП-ОО ${dp.value.toFixed(2)} ${dp.unit || "Па"} — у безпечному діапазоні`,
-        zone: dp.zone_name || dp.zone_code,
-        time: fmtTime(dp.measured_at),
-      });
-    }
-    if (wind && typeof wind.value === "number") {
-      out.push({
-        tone: "info",
-        title: "Метеоумови",
-        text: `Вітер ${wind.value.toFixed(1)} м/с, напрям ${(byType.wind_direction?.value ?? 0).toFixed(0)}°`,
-        zone: wind.zone_name || wind.zone_code,
-        time: fmtTime(wind.measured_at),
-      });
+// Перетвори зібрані рядки секції на рядок або масив (якщо це нумерований список).
+function finalizeSection(lines) {
+  if (!lines || !lines.length) return null;
+  const items = [];
+  let para = [];
+  for (const l of lines) {
+    const li = l.match(/^\s*(?:\d+\s*[.):]|[-•*–—])\s+(.+)$/);
+    if (li) {
+      if (para.length) { items.push(para.join(" ").trim()); para = []; }
+      items.push(li[1].trim());
+    } else {
+      para.push(l);
     }
   }
-
-  return out.slice(0, 6);
+  if (para.length) items.push(para.join(" ").trim());
+  const cleaned = items.map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
+  if (!cleaned.length) return null;
+  return cleaned.length === 1 ? cleaned[0] : cleaned;
 }
+
+// Парсимо «Стан / Причина / Дія» з LLM-відповіді. Якщо мітки відсутні —
+// повертаємо null, тоді UI відобразить сирий текст із згортанням.
+function parseRecommendation(text) {
+  if (!text) return null;
+  const raw = { state: [], cause: [], action: [] };
+  let current = null;
+
+  for (const original of text.split(/\r?\n/)) {
+    const line = stripMarkdown(original);
+    if (!line) continue;
+    const m = line.match(/^(Стан системи|Стан|Причина|Дія|Рекомендовано|Рекомендац\S*)\s*[:\-—]\s*(.*)$/i);
+    if (m) {
+      const label = m[1].toLowerCase();
+      if (label.startsWith("причин")) current = "cause";
+      else if (label.startsWith("стан")) current = "state";
+      else current = "action";
+      if (m[2]) raw[current].push(m[2]);
+    } else if (current) {
+      raw[current].push(line);
+    }
+  }
+
+  const out = {
+    state: finalizeSection(raw.state),
+    cause: finalizeSection(raw.cause),
+    action: finalizeSection(raw.action),
+  };
+  return out.state || out.cause || out.action ? out : null;
+}
+
+function RecSection({ icon: Icon, label, text, tone }) {
+  const toneClass = {
+    state:  "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
+    cause:  "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400",
+    action: "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400",
+  }[tone] || "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className={`p-1.5 rounded-md flex-shrink-0 ${toneClass}`}>
+        <Icon className="w-3.5 h-3.5" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">{label}</p>
+        {Array.isArray(text) ? (
+          <ol className="list-decimal list-outside ml-4 space-y-1 text-sm text-slate-700 dark:text-slate-300 leading-relaxed marker:text-slate-400">
+            {text.map((it, i) => <li key={i}>{it}</li>)}
+          </ol>
+        ) : (
+          <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{text}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecommendationView({ text, open, setOpen, t }) {
+  const sections = parseRecommendation(text);
+  if (sections) {
+    return (
+      <div className="space-y-3">
+        {sections.state  && <RecSection icon={Activity}     label="Стан"    text={sections.state}  tone="state"  />}
+        {sections.cause  && <RecSection icon={AlertOctagon} label="Причина" text={sections.cause}  tone="cause"  />}
+        {sections.action && <RecSection icon={ShieldCheck}  label="Дія"     text={sections.action} tone="action" />}
+      </div>
+    );
+  }
+  const safe = text || "";
+  const firstLine = safe.split("\n")[0] || "";
+  const truncated = firstLine.length > 180 ? firstLine.slice(0, 180) + "…" : firstLine;
+  return (
+    <>
+      <div className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+        {open ? <span className="whitespace-pre-line">{safe}</span> : <span>{truncated}</span>}
+      </div>
+      {safe.length > 180 && (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="mt-2 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          {open ? <><ChevronUp className="w-3 h-3" /> {t("showLess")}</> : <><ChevronDown className="w-3 h-3" /> {t("showMore")}</>}
+        </button>
+      )}
+    </>
+  );
+}
+

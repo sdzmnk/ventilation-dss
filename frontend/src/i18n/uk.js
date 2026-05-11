@@ -47,6 +47,10 @@ export default {
   events: "Останні події",
   noEvents: "Подій немає",
   awaitingData: "Очікування даних від датчиків…",
+  clearLog: "Очистити",
+  minLabel: "мін",
+  maxLabel: "макс",
+  countLabel: "кільк",
 
   // === Real sensor channels (output_sum 2020-2024.xlsx) ===
   wind_speed:             "Швидкість вітру",

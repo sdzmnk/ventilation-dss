@@ -47,6 +47,10 @@ export default {
   events: "Recent events",
   noEvents: "No events",
   awaitingData: "Awaiting sensor data…",
+  clearLog: "Clear",
+  minLabel: "min",
+  maxLabel: "max",
+  countLabel: "n",
 
   // === Real sensor channels ===
   wind_speed:             "Wind speed",

@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { api } from "../api/client.js";
+import React from 'react';
 
 const STATUS_FILL = {
   ok:   "#10b981",
@@ -19,35 +18,21 @@ function dpStatus(dp) {
 
 const fmt = (v, digits = 1) => (typeof v === "number" ? v.toFixed(digits) : "—");
 
-export default function VentilationScheme() {
-  const [latest, setLatest] = useState([]);
+// Схема ділить дані з картками вище — приймає `stats` (24h-середні
+// з /analytic/stats), щоб числа на схемі та в картках завжди збігалися.
+export default function VentilationScheme({ stats = [] }) {
+  const m = Object.fromEntries(stats.map((r) => [r.sensor_type, r]));
 
-  useEffect(() => {
-    let cancel = false;
-    const load = async () => {
-      try {
-        const { data } = await api.get("/readings/latest");
-        if (!cancel) setLatest(data || []);
-      } catch { /* silent */ }
-    };
-    load();
-    const id = setInterval(load, 5000);
-    return () => { cancel = true; clearInterval(id); };
-  }, []);
-
-  // Index readings by sensor_type for direct lookup
-  const m = Object.fromEntries(latest.map((r) => [r.sensor_type, r]));
-
-  const dp        = m.dp_kp_oo?.value;
-  const pKp       = m.pressure_kp?.value;
-  const pOo       = m.pressure_oo?.value;
-  const flowKpIn  = m.flow_kp_in?.value;
-  const flowOoOut = m.flow_oo_out?.value;
-  const wind      = m.wind_speed?.value;
-  const windDir   = m.wind_direction?.value;
-  const guW       = m.gu_pressure_west_wall?.value;
-  const guE       = m.gu_pressure_east_wall?.value;
-  const guC       = m.gu_pressure_cyl_wall?.value;
+  const dp        = m.dp_kp_oo?.mean;
+  const pKp       = m.pressure_kp?.mean;
+  const pOo       = m.pressure_oo?.mean;
+  const flowKpIn  = m.flow_kp_in?.mean;
+  const flowOoOut = m.flow_oo_out?.mean;
+  const wind      = m.wind_speed?.mean;
+  const windDir   = m.wind_direction?.mean;
+  const guW       = m.gu_pressure_west_wall?.mean;
+  const guE       = m.gu_pressure_east_wall?.mean;
+  const guC       = m.gu_pressure_cyl_wall?.mean;
 
   const overall = dpStatus(dp);
 
@@ -104,23 +89,24 @@ export default function VentilationScheme() {
       >
         {/* DUCT BACKBONE */}
         <g className="ducts text-slate-200 dark:text-slate-800/80" stroke="currentColor" strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" fill="none">
-          <path d="M 60 150 L 650 150" />
-          <path d="M 650 150 L 680 90 L 780 90" />
-          <path d="M 650 150 L 680 210 L 780 210" />
-          <path d="M 780 90 L 810 150 L 960 150" />
-          <path d="M 960 380 L 60 380" />
+          {/* Supply (Приплив) */}
+          <path d="M 60 150 L 650 150 L 680 90 L 780 90 L 810 150 L 960 150" />
+          {/* Exhaust (Витяжка) */}
+          <path d="M 960 310 L 850 310 L 800 210 L 780 210" />
+          <path d="M 680 210 L 675 210 L 590 380 L 60 380" />
         </g>
 
         {/* AIRFLOW */}
         <g strokeWidth="4" strokeLinecap="round" fill="none" strokeDasharray="8 16" className="animate-airflow pointer-events-none">
+          {/* Supply Airflow (Blue) */}
           <g className="stroke-blue-500/70 dark:stroke-blue-400/70">
-            <path d="M 70 150 L 645 150" />
-            <path d="M 650 150 L 680 90 L 775 90" />
-            <path d="M 650 150 L 680 210 L 775 210" />
+            <path d="M 70 150 L 645 150 L 680 90 L 775 90" />
             <path d="M 785 90 L 810 150 L 950 150" />
           </g>
+          {/* Exhaust Airflow (Grey) */}
           <g className="stroke-slate-400/80 dark:stroke-slate-500/80">
-            <path d="M 950 380 L 70 380" />
+            <path d="M 950 310 L 850 310 L 800 210 L 785 210" />
+            <path d="M 675 210 L 590 380 L 70 380" />
           </g>
         </g>
 

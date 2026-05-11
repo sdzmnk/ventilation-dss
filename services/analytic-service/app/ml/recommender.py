@@ -1,8 +1,6 @@
 import json
 import os
 
-from openai import OpenAI
-
 
 class Recommender:
     """Optional LLM-driven advice for ventilation diagnostics.
@@ -16,30 +14,44 @@ class Recommender:
         base_url = os.getenv("BASE_URL")
         api_key = os.getenv("HF_TOKEN")
         self.model = os.getenv("MODEL")
-        self.enabled = bool(base_url and api_key and self.model)
-        self.client = OpenAI(base_url=base_url, api_key=api_key) if self.enabled else None
+        self.client = None
+        self.enabled = False
+        if base_url and api_key and self.model:
+            try:
+                from openai import OpenAI
+                self.client = OpenAI(base_url=base_url, api_key=api_key)
+                self.enabled = True
+            except ImportError:
+                self.enabled = False
 
     @staticmethod
     def build_prompt(predicted_data: dict) -> str:
         return f"""
-You are an industrial HVAC diagnostics engineer.
-Analyze ventilation system ML prediction data.
-INPUT DATA:
-{json.dumps(predicted_data, indent=2)}
+Ти — інженер промислової вентиляції чистих приміщень.
+Проаналізуй вихід ML-моделі (XGBoost) і дай якісну рекомендацію оператору.
 
-YOUR TASK:
-1. Interpret current ventilation system condition
-2. Evaluate operational risk
-3. Explain possible cause
-4. Give practical operator recommendation
+ВХІДНІ ДАНІ:
+{json.dumps(predicted_data, indent=2, ensure_ascii=False)}
 
-RULES:
-- 1-2 short sentences
-- Use engineering language
-- Focus on airflow, overheating, filters, cooling, pressure stability
-- Avoid generic phrases
-- Be concise and practical
-- Answer in English
+ФОРМАТ ВІДПОВІДІ — РІВНО 3 СЕКЦІЇ. Структура однакова для OK / WARNING / CRITICAL.
+Стан: одне коротке речення про загальний стан системи (без конкретних чисел та відсотків).
+Причина: одне коротке речення — який клас каналів виявився визначальним для моделі (тиск / перепад / витрата / параметри гермозони), без числових значень і без точних назв датчиків.
+Дія: 2-3 нумеровані пункти "1.", "2.", "3." з якісними рекомендаціями (загальні групи обладнання: приточна/витяжна вентиляція, фільтри, гермозасувки, журнал зміни). Без конкретних позначень обладнання.
+
+СУВОРІ ЗАБОРОНИ:
+- Не наводь жодних чисел, відсотків, одиниць виміру (Па, м/с, м³/год), ±діапазонів.
+- Не цитуй конкретні значення з ВХІДНИХ ДАНИХ. Використовуй лише якісні слова: "стабільний", "у межах норми", "відхиляється", "знижений", "підвищений".
+- Не згадуй конкретних маркувань обладнання (М-1, Ф-102, К-1, ВСРО, тощо). Кажи узагальнено: "приточні вентилятори", "HEPA-фільтри", "гермозасувки".
+- Жодного markdown (**, __, `, #), жодних емодзі.
+- Кожна секція починається з нового рядка з мітки "Стан:", "Причина:" або "Дія:".
+
+ПРИКЛАД (для status=OK):
+Стан: Вентиляція працює у штатному режимі без явних відхилень.
+Причина: Визначальним для моделі залишається перепад тиску між зонами та параметри гермозони, які тримаються стабільно.
+Дія:
+1. Продовжувати штатний моніторинг тиску та витрати.
+2. Періодично перевіряти стан фільтрів і герметичність засувок.
+3. Фіксувати показання у журналі зміни.
 """
 
     def generate_advice(self, data: dict) -> str | None:
@@ -52,8 +64,8 @@ RULES:
                 {
                     "role": "system",
                     "content": (
-                        "You are an expert HVAC safety engineer "
-                        "specialized in ventilation diagnostics."
+                        "Ти — експерт з безпеки HVAC, спеціалізуєшся на діагностиці "
+                        "промислової вентиляції. Відповідай українською мовою."
                     ),
                 },
                 {"role": "user", "content": self.build_prompt(data)},

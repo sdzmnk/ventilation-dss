@@ -34,7 +34,6 @@ vi.mock("lucide-react", () => ({
   Compass: () => <span />,
   TrendingUp: () => <span />,
   Minus: () => <span />,
-  List: () => <span />,
   BrainCircuit: () => <span />,
   ChevronDown: () => <span />,
   ChevronUp: () => <span />,
@@ -42,13 +41,6 @@ vi.mock("lucide-react", () => ({
 
 import { api } from "../../api/client.js";
 import DashboardPage from "../DashboardPage.jsx";
-
-const LATEST_DATA = [
-  { sensor_id: 1, sensor_type: "pressure_kp", sensor_code: "KP-PRES",  value: -10.0, unit: "Па", zone_name: "КП", measured_at: "2024-01-01T12:00:00Z" },
-  { sensor_id: 2, sensor_type: "pressure_oo", sensor_code: "OO-PRES",  value: -17.0, unit: "Па", zone_name: "ОО", measured_at: "2024-01-01T12:00:00Z" },
-  { sensor_id: 3, sensor_type: "dp_kp_oo",    sensor_code: "DP-KP-OO", value: 7.0,   unit: "Па", zone_name: "DIFF", measured_at: "2024-01-01T12:00:00Z" },
-  { sensor_id: 4, sensor_type: "wind_speed",  sensor_code: "ENV-WSP",  value: 2.0,   unit: "м/с", zone_name: "ENV", measured_at: "2024-01-01T12:00:00Z" },
-];
 
 const STATS_DATA = [
   { sensor_type: "pressure_kp", count: 96, mean: -10.0, min: -50.0, max: 14.0, p95: 6.0 },
@@ -65,6 +57,7 @@ const PREDICTION_DATA = {
     risk_score: 96.5,
     confidence: 0.9,
     probabilities: { OK: 0.9, WARNING: 0.05, CRITICAL: 0.05 },
+    top_channels: ["dp_kp_oo_by", "flow_oo_in"],
   },
   recommendation: "Система працює нормально.",
 };
@@ -74,7 +67,6 @@ beforeEach(() => {
   vi.useFakeTimers();
 
   api.get.mockImplementation((url) => {
-    if (url === "/readings/latest")  return Promise.resolve({ data: LATEST_DATA });
     if (url === "/analytic/stats")   return Promise.resolve({ data: STATS_DATA });
     if (url === "/analytic/predict") return Promise.resolve({ data: PREDICTION_DATA });
     return Promise.resolve({ data: [] });
@@ -102,11 +94,6 @@ describe("DashboardPage — rendering", () => {
 });
 
 describe("DashboardPage — data fetching", () => {
-  it("calls /readings/latest on mount", async () => {
-    await act(async () => { render(<DashboardPage />); });
-    expect(api.get).toHaveBeenCalledWith("/readings/latest");
-  });
-
   it("calls /analytic/stats on mount", async () => {
     await act(async () => { render(<DashboardPage />); });
     expect(api.get).toHaveBeenCalledWith(
