@@ -43,12 +43,15 @@ export default {
   latestReadings: "Поточні показники",
   trends: "Динаміка за 24 години",
   refresh: "Оновити",
-  scheme: "Анемосхема вентиляційної мережі",
+  scheme: "Мнемосхема вентиляційної мережі",
   events: "Останні події",
   noEvents: "Подій немає",
   awaitingData: "Очікування даних від датчиків…",
+  clearLog: "Очистити",
+  minLabel: "мін",
+  maxLabel: "макс",
+  countLabel: "кільк",
 
-  // === Real sensor channels (output_sum 2020-2024.xlsx) ===
   wind_speed:             "Швидкість вітру",
   wind_direction:         "Напрям вітру",
   air_density:            "Густина повітря",

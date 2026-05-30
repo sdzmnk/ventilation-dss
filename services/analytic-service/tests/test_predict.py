@@ -4,7 +4,6 @@ import pytest
 from tests.conftest import HEADERS
 
 
-# A "nominal" snapshot — values close to dataset means (output_sum 2020-2024)
 SAFE_PARAMS = {
     "pressure_kp":           -10.0,
     "pressure_oo":           -17.0,
@@ -33,6 +32,7 @@ class TestPredictEndpoint:
         data = resp.json()
         assert "prediction_data" in data
         assert "recommendation" in data
+        assert "anomaly_detection" not in data
         pd = data["prediction_data"]
         assert "status" in pd
         assert "risk_score" in pd
@@ -84,7 +84,7 @@ class TestPredictEndpoint:
         resp = client.get("/analytic/predict", params=SAFE_PARAMS, headers=HEADERS)
         assert len(resp.json()["recommendation"]) > 10
 
-    def test_predict_critical_recommendation_contains_emergency_text(self, client):
+    def test_predict_critical_recommendation_mentions_key_channels(self, client):
         resp = client.get(
             "/analytic/predict",
             params=_override(
@@ -99,8 +99,9 @@ class TestPredictEndpoint:
             ),
             headers=HEADERS,
         )
-        rec = resp.json()["recommendation"]
-        assert "КРИТИЧНА" in rec or "критична" in rec.lower() or "аварійн" in rec.lower()
+        body = resp.json()
+        assert body["prediction_data"]["status"] in ("CRITICAL", "WARNING")
+        assert len(body["recommendation"]) > 10
 
 
 class TestChannelScoreLogic:

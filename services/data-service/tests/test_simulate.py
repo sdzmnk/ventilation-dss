@@ -26,7 +26,7 @@ class TestSimulate:
         assert resp.status_code == 200
         data = resp.json()
         assert "inserted" in data
-        assert data["inserted"] == 10  # 2 sensors * 5 points
+        assert data["inserted"] == 10
         assert data["sensors"] == 2
 
     def test_simulate_engineer_success(self, client, mock_conn):

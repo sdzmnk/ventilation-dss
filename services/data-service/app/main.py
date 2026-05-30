@@ -31,7 +31,6 @@ app.add_middleware(
 
 pool: Optional[asyncpg.Pool] = None
 
-# In-memory cache populated at startup from the CSV / JSON the container mounts.
 _DATASET: list[dict] = []
 _BASELINES: dict[str, dict] = {}
 _DATASET_CURSOR = 0
@@ -70,7 +69,6 @@ def role_required(*roles: str):
     return _dep
 
 
-# ===== Models =====
 class ZoneIn(BaseModel):
     code: str
     name: str
@@ -105,7 +103,6 @@ class ReadingOut(BaseModel):
     measured_at: datetime
 
 
-# ===== Lifecycle =====
 _ingest_task: Optional[asyncio.Task] = None
 
 
@@ -164,19 +161,12 @@ def _baseline(sensor_type: str) -> dict:
     """Statistics used when no CSV value is available."""
     if sensor_type in _BASELINES:
         b = _BASELINES[sensor_type]
-        # use stddev as noise band, but cap it so the live signal does not
-        # walk too far from the median
         std = max(0.001, float(b.get("std", 0.0)))
         return {"mean": float(b["p50"]), "noise": std * 0.4}
-    # fall back to safe defaults for unknown channels
     return {"mean": 1.0, "noise": 0.1}
 
 
-# Canonical topology — a single source of truth.
-# `_ensure_topology` syncs this against the DB on startup so a stale
-# `pgdata` volume from a previous schema gets healed without manual reset.
 TOPOLOGY = [
-    # (zone_code, zone_name, zone_desc, sensor_code, sensor_type, sensor_name, unit)
     ("ENV",  "Зовнішнє середовище",          "Метеопараметри: вітер, густина повітря",
         "ENV-WSP",   "wind_speed",     "Швидкість вітру",       "м/с"),
     ("ENV",  None, None,
@@ -245,7 +235,6 @@ async def _ensure_topology() -> None:
     valid_types = {row[4] for row in TOPOLOGY}
 
     async with p.acquire() as conn:
-        # zones
         for row in TOPOLOGY:
             zone_code, zone_name, zone_desc = row[0], row[1], row[2]
             if zone_name is None:
@@ -259,7 +248,6 @@ async def _ensure_topology() -> None:
                 zone_code, zone_name, zone_desc,
             )
 
-        # sensors
         for row in TOPOLOGY:
             zone_code, _, _, sensor_code, sensor_type, _name, unit = row
             zone_id = await conn.fetchval(
@@ -275,16 +263,11 @@ async def _ensure_topology() -> None:
                 zone_id, sensor_code, sensor_type, unit,
             )
 
-        # Drop obsolete sensors (e.g. old radiation/pressure/airflow/temperature)
-        # so they no longer pollute /readings/latest and /analytic/stats.
-        # Cascading FK on sensors.readings(sensor_id) cleans the readings.
         await conn.execute(
             "DELETE FROM sensors.sensors WHERE sensor_type <> ALL($1::text[])",
             list(valid_types),
         )
 
-        # Make sure the unit column is wide enough for the long names we use
-        # (legacy schema had VARCHAR(32); new units fit but be defensive).
         try:
             await conn.execute(
                 "ALTER TABLE sensors.sensors ALTER COLUMN sensor_type TYPE VARCHAR(64)"
@@ -308,7 +291,6 @@ async def _seed_history() -> None:
                JOIN sensors.sensors s ON s.id = r.sensor_id
                WHERE r.measured_at >= now() - INTERVAL '24 hours'"""
         )
-        # 24 sensors × at least 100 fresh rows ≈ a populated dashboard
         if n and n > 24 * 100:
             print(f"[data-service] readings up to date ({n} rows in last 24h) — skipping seed")
             return
@@ -316,8 +298,6 @@ async def _seed_history() -> None:
         sensors = await conn.fetch("SELECT id, sensor_type FROM sensors.sensors")
         sensor_by_type = {s["sensor_type"]: s["id"] for s in sensors}
 
-        # Clean stale readings tied to this topology to avoid the "step
-        # function" we saw on the trend chart when old + new data mix.
         await conn.execute(
             """DELETE FROM sensors.readings
                WHERE measured_at < now() - INTERVAL '24 hours'"""
@@ -336,8 +316,6 @@ async def _seed_history() -> None:
                     )
             return
 
-        # Spread 288 CSV snapshots evenly across the last 24h so the
-        # timeline always looks current.
         seed_rows = _DATASET[-288:]
         now = datetime.now(timezone.utc)
         step = timedelta(hours=24) / max(1, len(seed_rows))
@@ -383,8 +361,6 @@ async def _ingest_loop() -> None:
                         v = _row_value(row, sensor_type)
                         if v is None:
                             v = base["mean"]
-                        # gentle noise so identical CSV passes do not look
-                        # like a step function
                         v = v + random.uniform(-base["noise"] * 0.25,
                                                 base["noise"] * 0.25)
                     else:
@@ -395,7 +371,6 @@ async def _ingest_loop() -> None:
                         s["id"], v, now,
                     )
 
-                # keep the table bounded
                 await conn.execute(
                     "DELETE FROM sensors.readings WHERE measured_at < now() - INTERVAL '7 days'"
                 )
@@ -411,7 +386,6 @@ async def health():
     return {"status": "ok", "service": "data-service"}
 
 
-# ===== Zones =====
 @app.get("/zones", response_model=list[ZoneOut])
 async def list_zones(_: dict = Depends(auth_required)):
     p = await get_pool()
@@ -458,7 +432,6 @@ async def delete_zone(zone_id: int, _: dict = Depends(role_required("admin"))):
     return {"deleted": zone_id}
 
 
-# ===== Sensors =====
 @app.get("/sensors", response_model=list[SensorOut])
 async def list_sensors(zone_id: Optional[int] = None, _: dict = Depends(auth_required)):
     p = await get_pool()
@@ -510,7 +483,6 @@ async def delete_sensor(sensor_id: int, _: dict = Depends(role_required("admin")
     return {"deleted": sensor_id}
 
 
-# ===== Readings =====
 @app.get("/readings", response_model=list[ReadingOut])
 async def list_readings(
     sensor_id: Optional[int] = None,
@@ -574,7 +546,6 @@ async def latest_readings(_: dict = Depends(auth_required)):
     return [dict(r) for r in rows]
 
 
-# ===== Simulation =====
 @app.post("/simulate")
 async def simulate(
     points_per_sensor: int = Query(20, ge=1, le=500),

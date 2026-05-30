@@ -40,7 +40,6 @@ class ChatControllerTest {
         assertThat(result.get("service")).isEqualTo("chat-service");
     }
 
-    // ===== GET /chat/users =====
 
     @Test
     void listUsers_returnsUsersExceptSelf() {
@@ -56,7 +55,6 @@ class ChatControllerTest {
         verify(chatService).listUsers(1L);
     }
 
-    // ===== GET /chat/rooms =====
 
     @Test
     void listRooms_returnsAllAccessibleRooms() {
@@ -73,7 +71,6 @@ class ChatControllerTest {
         assertThat(result.get(0).getName()).isEqualTo("general");
     }
 
-    // ===== POST /chat/rooms =====
 
     @Test
     void createRoom_callsServiceWithName() {
@@ -91,7 +88,6 @@ class ChatControllerTest {
         verify(chatService).createRoom("devops");
     }
 
-    // ===== POST /chat/dm/{userId} =====
 
     @Test
     void getOrCreateDm_callsServiceWithBothUserIds() {
@@ -109,7 +105,6 @@ class ChatControllerTest {
         verify(chatService).getOrCreateDm(1L, 2L);
     }
 
-    // ===== GET /chat/rooms/{roomId}/messages =====
 
     @Test
     void history_returnsMessagesWithSafeLimit() {
@@ -140,7 +135,6 @@ class ChatControllerTest {
         verify(chatService).history(1L, 5L, 1);
     }
 
-    // ===== POST /chat/rooms/{roomId}/messages =====
 
     @Test
     void send_callsServiceWithUsernameFromClaims() {

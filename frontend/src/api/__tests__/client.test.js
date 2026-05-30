@@ -1,15 +1,6 @@
-/**
- * Tests for the Axios API client (src/api/client.js).
- *
- * The client:
- * 1. Reads `vdss.token` from localStorage and injects it as Authorization header.
- * 2. On a 401 response, clears all `vdss.*` keys from localStorage.
- * 3. wsUrl() builds a WebSocket URL from the HTTP base.
- */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-// Mock axios before importing the module under test
 vi.mock("axios", () => {
   const interceptors = {
     request: { use: vi.fn((fn) => { interceptors._reqFn = fn; }) },
@@ -19,7 +10,6 @@ vi.mock("axios", () => {
   return { default: { create: vi.fn(() => instance) } };
 });
 
-// Reset modules so we get a fresh import each describe block
 beforeEach(() => {
   vi.resetModules();
   localStorage.clear();
@@ -104,7 +94,6 @@ describe("wsUrl — WebSocket URL builder", () => {
   it("converts http: to ws:", async () => {
     const { wsUrl } = await import("../client.js");
 
-    // Mock window.location for jsdom
     Object.defineProperty(window, "location", {
       value: { origin: "http://localhost:5173", protocol: "http:" },
       writable: true,

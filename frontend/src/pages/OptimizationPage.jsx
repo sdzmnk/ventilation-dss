@@ -41,7 +41,7 @@ export default function OptimizationPage() {
 
   const loadHistory = async () => {
     try { const { data } = await api.get("/analytic/runs", { params: { limit: 15 } }); setHistory(data || []); }
-    catch { /* ignore */ }
+    catch {  }
   };
   useEffect(() => { loadHistory(); }, []);
 

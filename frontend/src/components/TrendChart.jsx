@@ -25,7 +25,7 @@ export default function TrendChart({ sensorType, label, color = "#60a5fa" }) {
           params: { sensor_type: sensorType, hours: 24, bucket_minutes: 15 },
         });
         if (!ignore) setPoints(data || []);
-      } catch { /* ignore */ }
+      } catch {  }
     };
     run();
     const id = setInterval(run, 30000);

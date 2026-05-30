@@ -40,7 +40,6 @@ class ConfigServiceTest {
         return p;
     }
 
-    // ===== listAll =====
 
     @Test
     void listAll_returnsAllParams() {
@@ -63,7 +62,6 @@ class ConfigServiceTest {
         assertThat(configService.listAll()).isEmpty();
     }
 
-    // ===== getByKey =====
 
     @Test
     void getByKey_existingKey_returnsParam() {
@@ -86,7 +84,6 @@ class ConfigServiceTest {
                         .isEqualTo(HttpStatus.NOT_FOUND));
     }
 
-    // ===== upsert =====
 
     @Test
     void upsert_newKey_createsNewParameter() {
@@ -123,7 +120,6 @@ class ConfigServiceTest {
         verify(repo).save(any(Parameter.class));
     }
 
-    // ===== delete =====
 
     @Test
     void delete_callsRepositoryDeleteByKey() {

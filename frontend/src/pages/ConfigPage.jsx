@@ -4,7 +4,6 @@ import { api } from "../api/client.js";
 import { useI18n } from "../i18n/i18n.jsx";
 import { useAuth } from "../api/auth.jsx";
 
-// Keys mirror configuration.parameters seeded in db/init.sql
 const FRIENDLY_LABELS = {
   pressure_kp_min_pa:    "Мін. тиск КП",
   pressure_kp_max_pa:    "Макс. тиск КП",

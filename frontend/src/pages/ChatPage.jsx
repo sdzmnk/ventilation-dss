@@ -53,14 +53,14 @@ export default function ChatPage() {
       const ws = new WebSocket(url);
       ws.onmessage = (ev) => {
         try { const m = JSON.parse(ev.data); setMessages((p) => [...p, m]); }
-        catch { /* ignore */ }
+        catch {  }
       };
       wsRef.current = ws;
     };
     open();
     return () => {
       cancelled = true;
-      try { wsRef.current?.close(); } catch { /* ignore */ }
+      try { wsRef.current?.close(); } catch {  }
       wsRef.current = null;
     };
   }, [active]);

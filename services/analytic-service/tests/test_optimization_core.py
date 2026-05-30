@@ -70,13 +70,10 @@ class TestCostFunction:
         assert _cost(20, 30, 0.5, req) > 0
 
     def test_dp_below_min_adds_penalty(self):
-        # Force a tiny dp_min so we can construct a clearly-violating point
         req = default_req(dp_kp_oo_min=10.0)
-        # very low load → small |pressures| → small dp
         c_violate = _cost(req.flow_kp_min, req.flow_oo_min, 0.05, req)
-        # high load → bigger pressures → bigger dp gap (still negative because ОО pulls harder)
         c_ok      = _cost(req.flow_kp_max, req.flow_oo_min, 0.5, req)
-        assert c_violate > 0 and c_ok > 0  # both finite
+        assert c_violate > 0 and c_ok > 0
 
     def test_flow_kp_below_min_adds_penalty(self):
         req = default_req()
@@ -134,7 +131,7 @@ class TestOptimizeGrid:
 
     def test_iterations_equal_grid_size(self):
         r = _optimize_grid(default_req(method="grid"))
-        assert r["iterations"] == 12 * 12 * 12  # see _optimize_grid
+        assert r["iterations"] == 12 * 12 * 12
 
     def test_optimal_flows_within_bounds(self):
         req = default_req(method="grid")
@@ -148,5 +145,4 @@ class TestOptimizeGrid:
         g = _optimize_grid(req)
         cs = _cost(s["optimal_flow_kp"], s["optimal_flow_oo"], s["optimal_fan_load"], req)
         cg = _cost(g["optimal_flow_kp"], g["optimal_flow_oo"], g["optimal_fan_load"], req)
-        # Both algorithms should land near each other (within 50% — grid is coarse)
         assert abs(cs - cg) / max(cs, cg) < 0.5

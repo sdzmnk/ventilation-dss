@@ -1,4 +1,3 @@
--- Schemas per service
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS profile;
 CREATE SCHEMA IF NOT EXISTS sensors;
@@ -7,7 +6,6 @@ CREATE SCHEMA IF NOT EXISTS configuration;
 CREATE SCHEMA IF NOT EXISTS discovery;
 CREATE SCHEMA IF NOT EXISTS chat;
 
--- ===== auth =====
 CREATE TABLE IF NOT EXISTS auth.users (
     id           BIGSERIAL PRIMARY KEY,
     username     VARCHAR(64) UNIQUE NOT NULL,
@@ -27,14 +25,12 @@ CREATE TABLE IF NOT EXISTS auth.refresh_tokens (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- seed admin (password: admin123, bcrypt of "admin123")
 INSERT INTO auth.users (username, email, password_hash, role)
 VALUES ('admin', 'admin@vent.local',
         '$2b$12$rRG7dLG7rAd3sV0FQg5pIuxvbxV.zP1Fo0ZD16qPDvLpXg06o.Sni',
         'admin')
 ON CONFLICT DO NOTHING;
 
--- ===== profile (user-service) =====
 CREATE TABLE IF NOT EXISTS profile.user_profiles (
     user_id     BIGINT PRIMARY KEY,
     full_name   VARCHAR(255),
@@ -44,8 +40,6 @@ CREATE TABLE IF NOT EXISTS profile.user_profiles (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ===== sensors (data-service) =====
--- The schema is unchanged — we just feed it real channel topology below.
 CREATE TABLE IF NOT EXISTS sensors.zones (
     id          BIGSERIAL PRIMARY KEY,
     code        VARCHAR(32) UNIQUE NOT NULL,
@@ -69,12 +63,6 @@ CREATE TABLE IF NOT EXISTS sensors.readings (
 );
 CREATE INDEX IF NOT EXISTS idx_readings_sensor_time ON sensors.readings(sensor_id, measured_at DESC);
 
--- Zone topology mirrors the real plant layout in the source dataset:
---   ENV — навколишнє середовище (вітер, густина повітря)
---   KP  — герметична зона / контайнмент (Тиск КП, Витрата КП+)
---   OO  — приміщення обстеження-обслуговування (Тиск ОО, Витрати ОО±)
---   DIFF — перепади тисків між КП / ОО / ОС
---   GU  — гермоустановка: тиски на стінках і зазорах
 INSERT INTO sensors.zones (code, name, description) VALUES
     ('ENV',  'Зовнішнє середовище',          'Метеопараметри: вітер, густина повітря'),
     ('KP',   'Герметична зона (контайнмент)', 'Тиск і витрата у герметичній зоні'),
@@ -83,20 +71,15 @@ INSERT INTO sensors.zones (code, name, description) VALUES
     ('GU',   'Гермоустановка',                'Тиски на стінках, зазорах та СКО')
 ON CONFLICT DO NOTHING;
 
--- 24 sensors covering every channel from output_sum 2020-2024.xlsx
 INSERT INTO sensors.sensors (zone_id, code, sensor_type, unit) VALUES
-    -- ENV
     ((SELECT id FROM sensors.zones WHERE code='ENV'),  'ENV-WSP',   'wind_speed',           'м/с'),
     ((SELECT id FROM sensors.zones WHERE code='ENV'),  'ENV-WDIR',  'wind_direction',       '°'),
     ((SELECT id FROM sensors.zones WHERE code='ENV'),  'ENV-RHO',   'air_density',          'кг/м³'),
-    -- KP
     ((SELECT id FROM sensors.zones WHERE code='KP'),   'KP-PRES',   'pressure_kp',          'Па'),
     ((SELECT id FROM sensors.zones WHERE code='KP'),   'KP-FLOW-IN','flow_kp_in',           'тис. м³/год'),
-    -- OO
     ((SELECT id FROM sensors.zones WHERE code='OO'),   'OO-PRES',   'pressure_oo',          'Па'),
     ((SELECT id FROM sensors.zones WHERE code='OO'),   'OO-FLOW-OUT','flow_oo_out',         'тис. м³/год'),
     ((SELECT id FROM sensors.zones WHERE code='OO'),   'OO-FLOW-IN','flow_oo_in',           'тис. м³/год'),
-    -- DIFF
     ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-KP-OS',     'dp_kp_os',          'Па'),
     ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-OO-OS-8',   'dp_oo_os_8',        'Па'),
     ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-OO-OS-9',   'dp_oo_os_9',        'Па'),
@@ -104,7 +87,6 @@ INSERT INTO sensors.sensors (zone_id, code, sensor_type, unit) VALUES
     ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-KP-OO-BY',  'dp_kp_oo_by',       'Па'),
     ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-KP-OO-BZ',  'dp_kp_oo_bz',       'Па'),
     ((SELECT id FROM sensors.zones WHERE code='DIFF'), 'DP-KP-OO-CA',  'dp_kp_oo_ca',       'Па'),
-    -- GU
     ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-P-W',     'gu_pressure_west_wall', 'Па'),
     ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-P-E',     'gu_pressure_east_wall', 'Па'),
     ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-P-CYL',   'gu_pressure_cyl_wall',  'Па'),
@@ -116,7 +98,6 @@ INSERT INTO sensors.sensors (zone_id, code, sensor_type, unit) VALUES
     ((SELECT id FROM sensors.zones WHERE code='GU'),   'GU-S-KPOS',  'gu_sigma_kp_os',        'Па')
 ON CONFLICT DO NOTHING;
 
--- ===== analytic =====
 CREATE TABLE IF NOT EXISTS analytic.optimization_runs (
     id          BIGSERIAL PRIMARY KEY,
     user_id     BIGINT,
@@ -128,7 +109,6 @@ CREATE TABLE IF NOT EXISTS analytic.optimization_runs (
     finished_at TIMESTAMPTZ
 );
 
--- ===== configuration =====
 CREATE TABLE IF NOT EXISTS configuration.parameters (
     id          BIGSERIAL PRIMARY KEY,
     key         VARCHAR(128) UNIQUE NOT NULL,
@@ -137,7 +117,6 @@ CREATE TABLE IF NOT EXISTS configuration.parameters (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Defaults calibrated from the 2020-2024 dataset (output_sum *.xlsx)
 INSERT INTO configuration.parameters (key, value, description) VALUES
     ('pressure_kp_min_pa',   '-50.0', 'Мінімальний тиск КП (Па) — нижче починається попередження'),
     ('pressure_kp_max_pa',    '15.0', 'Максимальний тиск КП (Па)'),
@@ -156,7 +135,6 @@ INSERT INTO configuration.parameters (key, value, description) VALUES
     ('filter_efficiency',     '0.999','Ефективність HEPA фільтру')
 ON CONFLICT DO NOTHING;
 
--- ===== discovery =====
 CREATE TABLE IF NOT EXISTS discovery.services (
     id          BIGSERIAL PRIMARY KEY,
     name        VARCHAR(64) UNIQUE NOT NULL,
@@ -165,7 +143,6 @@ CREATE TABLE IF NOT EXISTS discovery.services (
     last_seen   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- ===== chat =====
 CREATE TABLE IF NOT EXISTS chat.rooms (
     id          BIGSERIAL PRIMARY KEY,
     name        VARCHAR(128),

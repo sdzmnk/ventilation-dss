@@ -57,7 +57,6 @@ class UserControllerTest {
         assertThat(result.get("service")).isEqualTo("user-service");
     }
 
-    // ===== GET /users =====
 
     @Test
     void listUsers_asAdmin_returnsAll() {
@@ -81,7 +80,6 @@ class UserControllerTest {
                         .isEqualTo(HttpStatus.FORBIDDEN));
     }
 
-    // ===== GET /users/me =====
 
     @Test
     void me_returnsCurrentUserProfile() {
@@ -94,7 +92,6 @@ class UserControllerTest {
         verify(userService).getProfile(3L);
     }
 
-    // ===== PUT /users/me =====
 
     @Test
     void updateMe_callsServiceAndReturns() {
@@ -109,7 +106,6 @@ class UserControllerTest {
         assertThat(result.getFull_name()).isEqualTo("Carol Updated");
     }
 
-    // ===== GET /users/{id} =====
 
     @Test
     void getUser_adminCanAccessAnyUser() {
@@ -137,7 +133,6 @@ class UserControllerTest {
                         .isEqualTo(HttpStatus.FORBIDDEN));
     }
 
-    // ===== PUT /users/{id} =====
 
     @Test
     void updateUser_asAdmin_callsService() {
@@ -159,7 +154,6 @@ class UserControllerTest {
                         .isEqualTo(HttpStatus.FORBIDDEN));
     }
 
-    // ===== PATCH /users/{id}/role =====
 
     @Test
     void changeRole_asAdmin_callsService() {
@@ -184,7 +178,6 @@ class UserControllerTest {
                         .isEqualTo(HttpStatus.FORBIDDEN));
     }
 
-    // ===== DELETE /users/{id} =====
 
     @Test
     void deleteUser_asAdmin_callsService() {

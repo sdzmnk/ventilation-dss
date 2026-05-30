@@ -9,8 +9,6 @@ export default defineConfig({
     host: true,
     port: 5173,
     watch: {
-      // Required when source is bind-mounted from a Windows host into a Linux
-      // container — inotify events from the host don't always propagate.
       usePolling: true,
       interval: 500,
     },

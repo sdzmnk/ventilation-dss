@@ -64,8 +64,10 @@ services:
       SERVICE_NAME: analytic-service
       SERVICE_PORT: 8004
       VENT_BASELINES_JSON: /data/ventilation_baselines.json
+      VENT_DATASET_CSV: /data/ventilation_history.csv
     volumes:
       - ./db/ventilation_baselines.json:/data/ventilation_baselines.json:ro
+      - ./db/ventilation_history.csv:/data/ventilation_history.csv:ro
     ports:
       - "8004:8004"
 
