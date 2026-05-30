@@ -72,7 +72,6 @@ class ChatServiceTest {
         return m;
     }
 
-    // ===== listUsers =====
 
     @Test
     void listUsers_excludesCurrentUser() {
@@ -94,7 +93,6 @@ class ChatServiceTest {
         assertThat(chatService.listUsers(1L)).isEmpty();
     }
 
-    // ===== listRooms =====
 
     @Test
     void listRooms_returnsPublicRoomsAndDmRooms() {
@@ -109,7 +107,6 @@ class ChatServiceTest {
         assertThat(result.get(0).getName()).isEqualTo("alerts");
     }
 
-    // ===== createRoom =====
 
     @Test
     void createRoom_newRoom_createsAndReturns() {
@@ -135,7 +132,6 @@ class ChatServiceTest {
         verify(roomRepo, never()).save(any());
     }
 
-    // ===== getOrCreateDm =====
 
     @Test
     void getOrCreateDm_samePerson_throws400() {
@@ -175,7 +171,6 @@ class ChatServiceTest {
         verify(dmRepo, times(2)).save(any(DmParticipant.class));
     }
 
-    // ===== hasAccess =====
 
     @Test
     void hasAccess_publicRoom_returnsTrue() {
@@ -209,7 +204,6 @@ class ChatServiceTest {
         assertThat(chatService.hasAccess(1L, 999L)).isFalse();
     }
 
-    // ===== history =====
 
     @Test
     void history_noAccess_throws403() {
@@ -239,7 +233,6 @@ class ChatServiceTest {
         assertThat(result.get(1).getBody()).isEqualTo("World");
     }
 
-    // ===== sendAndBroadcast =====
 
     @Test
     void sendAndBroadcast_noAccess_throws403() {

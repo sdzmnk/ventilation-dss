@@ -11,7 +11,7 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem("vdss.token");
     const cached = localStorage.getItem("vdss.user");
     if (token && cached) {
-      try { setUser(JSON.parse(cached)); } catch { /* ignore */ }
+      try { setUser(JSON.parse(cached)); } catch {  }
     }
     setReady(true);
   }, []);

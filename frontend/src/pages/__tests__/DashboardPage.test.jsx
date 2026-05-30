@@ -1,6 +1,3 @@
-/**
- * Tests for DashboardPage component (new KP/OO/GU sensor topology).
- */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";

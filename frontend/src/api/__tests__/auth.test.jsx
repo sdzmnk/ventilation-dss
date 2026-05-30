@@ -1,17 +1,8 @@
-/**
- * Tests for AuthProvider and useAuth (src/api/auth.jsx).
- *
- * The context provides: user, ready, login(), register(), logout()
- * - login/register persist tokens + user to localStorage
- * - logout clears localStorage and sets user to null
- * - On mount, restores user from localStorage if token present
- */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, act, waitFor } from "@testing-library/react";
 import { AuthProvider, useAuth } from "../auth.jsx";
 
-// Mock the API client so we don't make real HTTP calls
 vi.mock("../client.js", () => ({
   api: {
     post: vi.fn(),
@@ -94,7 +85,6 @@ describe("AuthProvider — initial state", () => {
 
   it("does not restore user if token missing even if user cached", async () => {
     localStorage.setItem("vdss.user", JSON.stringify(FAKE_USER));
-    // No token
 
     render(<AuthProvider><TestConsumer /></AuthProvider>);
     await waitFor(() => {
@@ -110,7 +100,6 @@ describe("AuthProvider — initial state", () => {
     await waitFor(() => {
       expect(screen.getByTestId("ready").textContent).toBe("true");
     });
-    // Should not throw; user may remain null
   });
 });
 

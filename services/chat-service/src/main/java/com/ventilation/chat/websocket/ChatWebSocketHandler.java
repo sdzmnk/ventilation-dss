@@ -92,7 +92,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private Long extractRoomId(URI uri) {
         if (uri == null) return null;
         String path = uri.getPath();
-        // path: /chat/ws/{roomId}
         String[] parts = path.split("/");
         try {
             return Long.parseLong(parts[parts.length - 1]);

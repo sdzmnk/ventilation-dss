@@ -21,7 +21,6 @@ SRC_DIR = Path(r"C:\Users\sdzim\Downloads\Telegram Desktop")
 OUT_DIR = Path(r"C:\Users\sdzim\ventilation-dss\db")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Cyrillic column name -> normalized ASCII sensor key
 COLMAP = {
     "Швидкість вітру":              "wind_speed",
     "Напрям вітру":                 "wind_direction",
@@ -64,7 +63,6 @@ def parse_dpe(v):
     if isinstance(v, pd.Timestamp):
         return v
     s = str(v).strip()
-    # Examples: "2020.01.17 05:00:00.000", "2020-12-01 08:00:00"
     for fmt in ("%Y.%m.%d %H:%M:%S.%f", "%Y.%m.%d %H:%M:%S",
                 "%Y-%m-%d %H:%M:%S",   "%Y-%m-%d %H:%M:%S.%f"):
         try:
@@ -85,12 +83,10 @@ for fname in FILES:
     sheet = xl.sheet_names[0]
     df = pd.read_excel(p, sheet_name=sheet)
 
-    # rename Cyrillic columns to ASCII keys; drop the rest
     rename = {c: COLMAP[c] for c in df.columns if c in COLMAP}
     keep = list(rename.values())
     df = df.rename(columns=rename)
 
-    # parse timestamp
     if "DPE" not in df.columns:
         print("  no DPE col, skipping")
         continue
@@ -103,38 +99,31 @@ for fname in FILES:
 merged = pd.concat(frames, ignore_index=True)
 print("merged shape", merged.shape)
 
-# fill ALL channels even if some files were missing a column
 for key in COLMAP.values():
     if key not in merged.columns:
         merged[key] = pd.NA
 
 merged = merged.sort_values("ts").reset_index(drop=True)
 
-# coerce numeric — bad cells become NaN
 for c in merged.columns:
     if c == "ts":
         continue
     merged[c] = pd.to_numeric(merged[c], errors="coerce")
 
-# drop rows that are basically empty
 data_cols = [c for c in merged.columns if c != "ts"]
 merged = merged.dropna(subset=data_cols, how="all")
 
-# down-sample: keep ~2500 rows total, evenly spaced across the timeline
 TARGET = 2500
 stride = max(1, len(merged) // TARGET)
 sampled = merged.iloc[::stride].reset_index(drop=True)
 print("sampled to", len(sampled), "rows (stride", stride, ")")
 
-# forward-fill remaining NaNs per column (so every row is a complete snapshot)
 sampled = sampled.ffill().bfill()
 
-# write CSV
 csv_path = OUT_DIR / "ventilation_history.csv"
 sampled.to_csv(csv_path, index=False, encoding="utf-8")
 print("wrote", csv_path)
 
-# baseline stats per channel for the live noise generator
 stats = {}
 for c in data_cols:
     s = sampled[c].dropna().astype(float)

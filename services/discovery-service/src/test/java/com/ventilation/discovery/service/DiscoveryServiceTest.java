@@ -39,7 +39,6 @@ class DiscoveryServiceTest {
         return e;
     }
 
-    // ===== seed =====
 
     @Test
     void seed_registersDefaultServices() {
@@ -69,7 +68,6 @@ class DiscoveryServiceTest {
         verify(repo).save(argThat(e -> "http://auth-service:8001".equals(e.getUrl())));
     }
 
-    // ===== listAll =====
 
     @Test
     void listAll_returnsAllServicesOrdered() {
@@ -93,7 +91,6 @@ class DiscoveryServiceTest {
         assertThat(discoveryService.listAll()).isEmpty();
     }
 
-    // ===== getByName =====
 
     @Test
     void getByName_existingService_returnsDto() {
@@ -117,7 +114,6 @@ class DiscoveryServiceTest {
                         .isEqualTo(HttpStatus.NOT_FOUND));
     }
 
-    // ===== register =====
 
     @Test
     void register_newService_savesAndReturns() {
@@ -154,7 +150,6 @@ class DiscoveryServiceTest {
         verify(repo).save(argThat(e -> "http://data-service:8003".equals(e.getUrl())));
     }
 
-    // ===== unregister =====
 
     @Test
     void unregister_callsDeleteByName() {
@@ -162,7 +157,6 @@ class DiscoveryServiceTest {
         verify(repo).deleteByName("obsolete-service");
     }
 
-    // ===== updateHealth =====
 
     @Test
     void updateHealth_healthy_callsRepository() {

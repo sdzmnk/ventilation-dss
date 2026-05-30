@@ -36,10 +36,10 @@ from scipy.optimize import minimize
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from ml.data_preprocess import VentilationPreprocessingService  # noqa: E402
-from ml.hvac_service import HVACVentilationModelService  # noqa: E402
-from ml.recommender import Recommender  # noqa: E402
-from ml.weight_service import WeightService  # noqa: E402
+from ml.data_preprocess import VentilationPreprocessingService
+from ml.hvac_service import HVACVentilationModelService
+from ml.recommender import Recommender
+from ml.weight_service import WeightService
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
 JWT_ALG = os.getenv("JWT_ALG", "HS256")
@@ -87,7 +87,6 @@ def auth_required(token: Optional[str] = Depends(oauth2)) -> dict:
         raise HTTPException(401, "Недійсний токен")
 
 
-# ===== Models =====
 class OptimizationIn(BaseModel):
     method: str = Field("scipy", description="scipy | grid")
     fan_power_kw: float = Field(15.0, gt=0)
@@ -128,7 +127,6 @@ class StatsOut(BaseModel):
     p95: float
 
 
-# ===== Lifecycle =====
 @app.on_event("startup")
 async def _startup() -> None:
     _load_baselines()
@@ -187,7 +185,6 @@ async def model_metrics(_: dict = Depends(auth_required)):
     return model_service.metrics
 
 
-# ===== Predict =====
 KNOWN_CHANNELS = WeightService.known_channels()
 WEIGHTED_CHANNELS = list(WeightService.CHANNEL_WEIGHTS.keys())
 
@@ -274,7 +271,7 @@ def _build_recommendation(prediction_data: dict, inputs: dict) -> str:
             advice = recommender.generate_advice(payload)
             if advice and advice.strip():
                 return advice.strip()
-        except Exception as exc:  # pragma: no cover - network errors
+        except Exception as exc:
             print(f"[analytic-service] Recommender failed, using fallback: {exc}")
 
     return _fallback_recommendation(prediction_data, drivers)
@@ -335,7 +332,6 @@ def _describe_top_features(v: dict, top_n: int = 5) -> list[str]:
     return out
 
 
-# ===== Stats =====
 @app.get("/analytic/stats", response_model=list[StatsOut])
 async def stats(hours: int = 24, _: dict = Depends(auth_required)):
     p = await get_pool()
@@ -381,7 +377,6 @@ async def trend(
     return [{"t": r["bucket"].isoformat(), "value": r["value"]} for r in rows]
 
 
-# ===== Optimization =====
 @app.post("/analytic/optimize", response_model=OptimizationResult)
 async def optimize(req: OptimizationIn, claims: dict = Depends(auth_required)):
     if req.flow_kp_max <= req.flow_kp_min:
@@ -437,7 +432,6 @@ async def list_runs(limit: int = 50, _: dict = Depends(auth_required)):
     return out
 
 
-# ===== Optimization core =====
 def _model(flow_kp: float, flow_oo: float, fan_load: float, req: OptimizationIn) -> dict:
     wind_off = 0.5 * (req.current_wind_speed - 2.0)
     norm_kp = flow_kp / max(req.flow_kp_max, 1.0)

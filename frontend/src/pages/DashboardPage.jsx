@@ -17,8 +17,6 @@ import { useI18n } from "../i18n/i18n.jsx";
 import VentilationScheme from "../components/VentilationScheme.jsx";
 import TrendChart from "../components/TrendChart.jsx";
 
-// All channels the prediction endpoint understands — backend ignores
-// the ones it doesn't weight, so we just pass everything we have.
 const PREDICT_CHANNELS = [
   "pressure_kp", "pressure_oo",
   "dp_kp_oo", "dp_kp_os", "dp_oo_os_8", "dp_oo_os_9",
@@ -30,7 +28,7 @@ const PREDICT_CHANNELS = [
   "gu_sigma_008", "gu_sigma_009", "gu_sigma_kp_os",
 ];
 
-const STATS_REFRESH_MS   = 10_000;  
+const STATS_REFRESH_MS   = 10_000;
 const PREDICT_REFRESH_MS = 18_000_000;
 
 export default function DashboardPage() {
@@ -59,7 +57,7 @@ export default function DashboardPage() {
       }
       const r = await api.get("/analytic/predict", { params });
       setPrediction(r.data);
-    } catch { /* silent */ }
+    } catch {  }
   };
 
   useEffect(() => {
@@ -283,7 +281,6 @@ function PredictCard({ data }) {
   );
 }
 
-// Зніми markdown-обгортки, які LLM любить дописувати (**...**, __...__, `...`).
 const stripMarkdown = (s) =>
   s
     .replace(/\*\*(.+?)\*\*/g, "$1")
@@ -292,7 +289,6 @@ const stripMarkdown = (s) =>
     .replace(/`(.+?)`/g, "$1")
     .trim();
 
-// Перетвори зібрані рядки секції на рядок або масив (якщо це нумерований список).
 function finalizeSection(lines) {
   if (!lines || !lines.length) return null;
   const items = [];
@@ -312,8 +308,6 @@ function finalizeSection(lines) {
   return cleaned.length === 1 ? cleaned[0] : cleaned;
 }
 
-// Парсимо «Стан / Причина / Дія» з LLM-відповіді. Якщо мітки відсутні —
-// повертаємо null, тоді UI відобразить сирий текст із згортанням.
 function parseRecommendation(text) {
   if (!text) return null;
   const raw = { state: [], cause: [], action: [] };

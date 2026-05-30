@@ -57,7 +57,6 @@ public class JwtService {
 
     private SecretKey signingKey() {
         byte[] bytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
-        // Ensure at least 32 bytes for HMAC-SHA256
         if (bytes.length < 32) {
             bytes = Arrays.copyOf(bytes, 32);
         }

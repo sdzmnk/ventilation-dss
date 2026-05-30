@@ -4,7 +4,6 @@ import pytest
 from tests.conftest import HEADERS
 
 
-# A "nominal" snapshot — values close to dataset means (output_sum 2020-2024)
 SAFE_PARAMS = {
     "pressure_kp":           -10.0,
     "pressure_oo":           -17.0,

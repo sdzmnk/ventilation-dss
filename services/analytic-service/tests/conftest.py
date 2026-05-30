@@ -12,12 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Point the service at the real dataset & baselines BEFORE importing app.main
 _REPO_DB = Path(__file__).resolve().parents[3] / "db"
 os.environ.setdefault("VENT_BASELINES_JSON", str(_REPO_DB / "ventilation_baselines.json"))
 os.environ.setdefault("VENT_DATASET_CSV",    str(_REPO_DB / "ventilation_history.csv"))
 
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi.testclient import TestClient
 
 JWT_SECRET = "dev-secret"
 JWT_ALG = "HS256"

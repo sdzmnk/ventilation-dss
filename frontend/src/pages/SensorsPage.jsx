@@ -4,7 +4,6 @@ import { api } from "../api/client.js";
 import { useI18n } from "../i18n/i18n.jsx";
 import { useAuth } from "../api/auth.jsx";
 
-// All sensor types known to the system, derived from the 2020-2024 dataset.
 const SENSOR_TYPES = [
   "wind_speed", "wind_direction", "air_density",
   "pressure_kp", "pressure_oo",
@@ -27,10 +26,10 @@ export default function SensorsPage() {
   const [latest, setLatest] = useState([]);
   const [zoneForm, setZoneForm] = useState({ code: "", name: "", description: "" });
   const [sensorForm, setSensorForm] = useState({ zone_id: "", code: "", sensor_type: "pressure_kp", unit: "Па" });
-  const [editZone, setEditZone] = useState(null);   // {id, code, name, description}
-  const [editSensor, setEditSensor] = useState(null); // {id, zone_id, code, sensor_type, unit}
-  const [expanded, setExpanded] = useState(null);   // sensor_id
-  const [history, setHistory] = useState({});       // { [sensorId]: [{value, measured_at}] }
+  const [editZone, setEditZone] = useState(null);
+  const [editSensor, setEditSensor] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const [history, setHistory] = useState({});
   const [err, setErr] = useState("");
 
   const load = async () => {
@@ -58,7 +57,6 @@ export default function SensorsPage() {
     return m;
   }, [latest]);
 
-  // ---- zones ----
   const addZone = async () => {
     if (!zoneForm.code || !zoneForm.name) return;
     try { await api.post("/zones", zoneForm); setZoneForm({ code: "", name: "", description: "" }); load(); }
@@ -79,7 +77,6 @@ export default function SensorsPage() {
     catch (e) { setErr(e?.response?.data?.detail || String(e)); }
   };
 
-  // ---- sensors ----
   const addSensor = async () => {
     if (!sensorForm.code || !sensorForm.unit) return;
     try {
@@ -121,7 +118,6 @@ export default function SensorsPage() {
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {err && <div className="badge badge-bad px-3 py-2">{err}</div>}
 
-      {/* ============ ZONES ============ */}
       <SectionCard title={t("zones")}>
         {canEdit && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
@@ -167,7 +163,6 @@ export default function SensorsPage() {
         </DataTable>
       </SectionCard>
 
-      {/* ============ SENSORS ============ */}
       <SectionCard title={t("sensors")}>
         {canEdit && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
@@ -313,7 +308,6 @@ function HistoryView({ readings, unit, t }) {
   if (!readings) return <div className="text-sm text-slate-400">…</div>;
   if (readings.length === 0) return <div className="text-sm text-slate-400">{t("noHistory")}</div>;
 
-  // readings come ordered DESC; reverse for chronological plot
   const points = [...readings].reverse();
   const values = points.map((p) => p.value);
   const min = Math.min(...values);

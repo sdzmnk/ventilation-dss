@@ -47,7 +47,6 @@ class UserServiceTest {
         return p;
     }
 
-    // ===== listAll =====
 
     @Test
     void listAll_returnsAllUsersWithProfiles() {
@@ -71,7 +70,6 @@ class UserServiceTest {
         assertThat(userService.listAll()).isEmpty();
     }
 
-    // ===== getProfile =====
 
     @Test
     void getProfile_existingUser_returnsProfile() {
@@ -108,7 +106,6 @@ class UserServiceTest {
         assertThat(out.getPosition()).isNull();
     }
 
-    // ===== updateProfile =====
 
     @Test
     void updateProfile_createsNewProfileWhenAbsent() {
@@ -143,7 +140,6 @@ class UserServiceTest {
                         .isEqualTo(HttpStatus.NOT_FOUND));
     }
 
-    // ===== changeRole =====
 
     @Test
     void changeRole_validRoles_updates() {
@@ -176,7 +172,6 @@ class UserServiceTest {
                         .isEqualTo(HttpStatus.NOT_FOUND));
     }
 
-    // ===== delete =====
 
     @Test
     void delete_callsRepositoryDeleteById() {

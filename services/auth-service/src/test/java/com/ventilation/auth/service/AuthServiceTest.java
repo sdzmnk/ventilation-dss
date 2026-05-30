@@ -47,7 +47,6 @@ class AuthServiceTest {
         when(jwt.generateRefreshToken(anyLong(), anyString(), anyString())).thenReturn("refresh.token");
     }
 
-    // ===== register =====
 
     @Test
     void register_success_returnsTokens() {
@@ -100,7 +99,6 @@ class AuthServiceTest {
                         .isEqualTo(HttpStatus.CONFLICT));
     }
 
-    // ===== login =====
 
     @Test
     void login_success_returnsTokens() {
@@ -162,7 +160,6 @@ class AuthServiceTest {
                         .isEqualTo(HttpStatus.UNAUTHORIZED));
     }
 
-    // ===== me =====
 
     @Test
     void me_validToken_returnsUserMap() {
@@ -189,7 +186,6 @@ class AuthServiceTest {
                         .isEqualTo(HttpStatus.UNAUTHORIZED));
     }
 
-    // ===== verify =====
 
     @Test
     void verify_validToken_returnsClaims() {
@@ -216,7 +212,6 @@ class AuthServiceTest {
                         .isEqualTo(HttpStatus.UNAUTHORIZED));
     }
 
-    // ===== refresh =====
 
     @Test
     void refresh_validRefreshToken_returnsNewTokens() {

@@ -54,7 +54,6 @@ class ConfigControllerTest {
         assertThat(result.get("service")).isEqualTo("config-service");
     }
 
-    // ===== GET /config =====
 
     @Test
     void listParams_anyAuthRole_callsService() {
@@ -70,7 +69,6 @@ class ConfigControllerTest {
         verify(configService).listAll();
     }
 
-    // ===== GET /config/{key} =====
 
     @Test
     void getParam_existingKey_returnsParam() {
@@ -82,7 +80,6 @@ class ConfigControllerTest {
         assertThat(result.getKey()).isEqualTo("fan_power_kw");
     }
 
-    // ===== PUT /config/{key} =====
 
     @Test
     void upsertParam_asAdmin_callsService() {
@@ -118,7 +115,6 @@ class ConfigControllerTest {
                         .isEqualTo(HttpStatus.FORBIDDEN));
     }
 
-    // ===== DELETE /config/{key} =====
 
     @Test
     void deleteParam_asAdmin_callsService() {

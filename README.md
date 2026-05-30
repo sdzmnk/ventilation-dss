@@ -1,133 +1,119 @@
 # Ventilation DSS
 
-Decision Support System for ventilation control in nuclear / hazardous facilities.
-Microservice architecture written in Python (FastAPI) with a React/Vite frontend,
-single PostgreSQL instance with one schema per service, and a gateway that fronts
-HTTP and WebSocket traffic for the browser.
+Система підтримки прийняття рішень (СППР) для моніторингу та управління
+вентиляційною системою на радіаційно-небезпечних об'єктах.
 
-## Services
+## Короткий опис
 
-| Service             | Port  | Schema           | Responsibility                                                                 |
-| ------------------- | ----- | ---------------- | ------------------------------------------------------------------------------ |
-| `auth-service`      | 8001  | `auth`           | Registration, login, JWT issuance / refresh / verify                          |
-| `user-service`      | 8002  | `profile`        | Per-user profile CRUD, admin user management                                   |
-| `data-service`      | 8003  | `sensors`        | Zones, sensors, readings; replays real 2020-2024 dataset (`db/ventilation_history.csv`) |
-| `analytic-service`  | 8004  | `analytic`       | Aggregated stats, trends, ventilation optimization (`scipy` / grid search)    |
-| `config-service`    | 8005  | `configuration`  | Runtime parameters (limits, costs, efficiency)                                |
-| `discovery-service` | 8006  | `discovery`      | Registry of services + periodic `/health` probing                              |
-| `chat-service`      | 8007  | `chat`           | Rooms, history, REST send + WebSocket broadcast                                |
-| `gateway-service`   | 8000  | —                | Reverse proxy / API gateway, including chat WebSocket relay                    |
-| `frontend`          | 5173  | —                | React + Vite SPA served by Nginx, proxies `/api` to the gateway                |
-| `postgres`          | 5432  | —                | Shared database (one schema per service)                                       |
+Програмна система забезпечує безперервний контроль стану припливно-витяжної
+вентиляції гермозони (КП / ОО / гермоустановка), аналітичну обробку даних та
+оптимізацію режимів роботи вентиляції в критичних умовах.
 
-## Quick start
+Основні можливості:
 
-```bash
-cp .env.example .env       # adjust JWT_SECRET in production
-docker compose up --build
-```
+- **Моніторинг** — збір та відображення показників із 24 вимірювальних каналів
+  (тиск КП/ОО, витрати КП+/ОО±, перепади тиску ΔP, тиск на стінках гермоустановки,
+  швидкість і напрям вітру, густина повітря) у реальному часі.
+- **Мнемосхема** вентиляційної мережі з індикацією стану зон і напрямків
+  повітряних потоків.
+- **Аналітика та прогнозування** — агрегована статистика, тренди, класифікація
+  9 критично важливих каналів за порогами, відкаліброваними на реальних даних
+  за 2020–2024 роки.
+- **Оптимізація** режимів вентиляції (витрати КП/ОО, навантаження вентилятора)
+  за критерієм мінімізації енергоспоживання з урахуванням обмежень безпеки
+  (методи `scipy` / пошук по сітці).
+- **Адміністрування** — керування користувачами, ролями (адміністратор,
+  інженер, оператор), параметрами конфігурації, а також обмін повідомленнями
+  між операторами.
 
-Then open <http://localhost:5173>.
+Архітектура — мікросервісна: серверні сервіси на Java (Spring Boot) та Python
+(FastAPI), єдина база даних PostgreSQL (окрема схема для кожного сервісу),
+шлюз (gateway), що проксіює HTTP- і WebSocket-трафік, та клієнтська частина
+(SPA) на React + Vite.
 
-The seeded admin account is:
+| Сервіс              | Порт | Призначення                                              |
+| ------------------- | ---- | -------------------------------------------------------- |
+| `auth-service`      | 8001 | Реєстрація, вхід, видача/оновлення/перевірка JWT          |
+| `user-service`      | 8002 | Профілі користувачів, адміністрування облікових записів   |
+| `data-service`      | 8003 | Зони, датчики, показники; відтворення даних 2020–2024      |
+| `analytic-service`  | 8004 | Статистика, тренди, прогноз, оптимізація вентиляції        |
+| `config-service`    | 8005 | Параметри конфігурації (ліміти, вартість, ефективність)    |
+| `discovery-service` | 8006 | Реєстр сервісів і періодична перевірка стану (`/health`)   |
+| `chat-service`      | 8007 | Кімнати, історія, надсилання повідомлень + WebSocket       |
+| `gateway-service`   | 8000 | Зворотний проксі / API-шлюз, ретрансляція WebSocket чату   |
+| `frontend`          | 5173 | React + Vite SPA (Nginx), проксіює `/api` на шлюз          |
+| `postgres`          | 5432 | Спільна база даних (схема на кожен сервіс)                 |
 
-- username: `admin`
-- password: `admin123`
+## Встановлення
 
-### Sensor data
+### Необхідне супровідне ПЗ
 
-The system runs on **real measurement data from a hermetic ventilation
-zone (КП / ОО / гермоустановка), aggregated from 2020–2024**. The raw
-Excel exports (`output_sum 2020 (1).xlsx` … `output_sum 2024.xlsx`) are
-preprocessed by `build_dataset.py` into:
+Для запуску в контейнерах достатньо встановити:
 
-- `db/ventilation_history.csv`     — ~2500 normalized snapshots covering
-  24 sensor channels (wind, КП/ОО pressures, КП+/ОО± flows, ΔP variants,
-  ГУ wall pressures, σ pressures);
-- `db/ventilation_baselines.json`  — per-channel mean/std/p05/p50/p95.
+- **Docker** (версія 20.10+);
+- **Docker Compose** (v2, входить до складу сучасного Docker).
 
-`docker-compose` mounts both files into the `data-service` and
-`analytic-service` containers. On startup, `data-service` seeds the
-readings table from the CSV (re-basing timestamps to "now") and then
-walks through the file row-by-row, replaying real readings as live data.
-`analytic-service` uses the baseline statistics to calibrate the
-prediction thresholds.
+Для локальної розробки або складання окремих частин без контейнерів додатково:
 
-To regenerate the dataset from the source spreadsheets, run:
+- **Node.js** 18+ та **npm** — клієнтська частина (`frontend`);
+- **JDK 17+** та **Maven** — Java-сервіси;
+- **Python** 3.11+ — сервіси `data-service` та `analytic-service`,
+  а також генерація набору даних (бібліотеки `pandas`, `openpyxl`).
+
+### Порядок встановлення
+
+1. Клонувати репозиторій:
+
+   ```bash
+   git clone <url-репозиторію>
+   cd ventilation-dss
+   ```
+
+2. Створити файл змінних середовища з прикладу
+   (у промисловому середовищі обов'язково змінити `JWT_SECRET`):
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Зібрати та запустити всі сервіси:
+
+   ```bash
+   docker compose up --build
+   ```
+
+4. Відкрити застосунок у браузері: <http://localhost:5173>.
+
+Стандартний обліковий запис адміністратора:
+
+- логін: `admin`
+- пароль: `admin123`
+
+### Дані вимірювань
+
+Система працює на **реальних даних вимірювань гермозони, агрегованих за
+2020–2024 роки**. Вихідні таблиці Excel попередньо обробляються скриптом
+`build_dataset.py` у файли `db/ventilation_history.csv` (нормалізовані
+знімки показників) та `db/ventilation_baselines.json` (базові статистики
+по каналах). Щоб перегенерувати набір даних:
 
 ```bash
 pip install pandas openpyxl
 python build_dataset.py
 ```
 
-End users see only the operational surfaces — overview, sensors,
-optimization, parameters, comms, profile. Administrators additionally
-see **Користувачі** and **Ролі** for managing accounts and access levels.
+## Авторство
 
-## Endpoints (via gateway, base `http://localhost:8000`)
+- **Клієнтська частина (frontend)** — виконана студенткою групи ТВ-21
+  **Зіменко Софією Дмитрівною**.
+  Тема дипломної роботи: «Створення інтерфейсу системи моніторингу та
+  управління вентиляційною системою на радіаційно-небезпечних об'єктах
+  для роботи в критичних умовах».
 
-- `POST /auth/register` (always creates an `operator`), `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me`, `GET /auth/verify?token=...`
-- `GET/PUT /users/me`, `GET /users` (admin), `GET/PUT/DELETE /users/{id}`, `PATCH /users/{id}/role` (admin only)
-- `GET/POST /zones`, `GET/POST /sensors`, `GET/POST /readings`, `GET /readings/latest`, `POST /simulate`
-- `GET /analytic/stats`, `GET /analytic/trend?sensor_type=...`, `POST /analytic/optimize`, `GET /analytic/runs`
-- `GET /config`, `GET/PUT/DELETE /config/{key}`
-- `GET /registry`, `POST /registry`, `DELETE /registry/{name}`
-- `GET /chat/rooms`, `POST /chat/rooms`, `GET /chat/rooms/{id}/messages`, `POST /chat/rooms/{id}/messages`
-- `WS /chat/ws/{room_id}?token=...`
-- `GET /services` — gateway probe of every backend
-- `GET /health` — on every service
+- **Серверна частина (backend)** — виконана студентом групи ТВ-21
+  **Носалем Василем Юрійовичем**.
+  Тема дипломної роботи: «Розробка серверної частини програмної системи
+  підтримки прийняття рішень оптимізації функціонування вентиляційної
+  системи на радіаційно-небезпечних об'єктах».
 
-## Roles
-
-Registration always creates an `operator`. Roles can only be elevated by an
-admin from the **Ролі** tab (or via `PATCH /users/{id}/role`).
-
-- `admin` — full access (manage users, sensor topology, configuration, role assignment)
-- `engineer` — manage sensors and run optimization
-- `operator` — read-only dashboard, run optimization, comms
-
-## Architecture notes
-
-- **Authentication** is centralized in `auth-service`. Every other service
-  validates the same JWT locally with `JWT_SECRET` (no extra round-trip).
-- **Gateway** matches the request prefix against a route table and forwards to
-  the corresponding service over the docker network. The same gateway also
-  proxies the WebSocket connection used by the chat UI.
-- **Discovery** continuously polls `/health` on every registered service every
-  15 seconds and stores the result in `discovery.services`.
-- **Optimization** in `analytic-service` minimizes the cost
-  `energy + Σ pressure_penalties + dp_kp_oo_penalty + flow_penalties`
-  over three control variables (`flow_kp`, `flow_oo`, `fan_load`) using
-  SciPy's L-BFGS-B or a grid search, then persists each run.
-- **Prediction** classifies the 9 safety-critical channels (КП/ОО pressure,
-  ΔP КП-ОО, КП+/ОО− flows, wind, three ГУ wall pressures) against
-  thresholds calibrated from the 2020-2024 dataset.
-
-## Project layout
-
-```
-.
-├── build_dataset.py              # Excel → CSV + baselines preprocessor
-├── db/
-│   ├── init.sql                  # schemas + zone/sensor topology
-│   ├── ventilation_history.csv   # 2020-2024 real readings (replayed by data-service)
-│   └── ventilation_baselines.json
-├── docker-compose.yml
-├── frontend/                  # React + Vite + Nginx
-│   ├── src/
-│   │   ├── api/               # axios client + auth context
-│   │   ├── components/        # shared UI (charts, ...)
-│   │   ├── i18n/              # uk / en dictionaries
-│   │   └── pages/             # Login, Dashboard, Sensors, Optimization, ...
-│   ├── Dockerfile
-│   └── nginx.conf
-└── services/
-    ├── auth-service/
-    ├── user-service/
-    ├── data-service/
-    ├── analytic-service/
-    ├── config-service/
-    ├── discovery-service/
-    ├── chat-service/
-    └── gateway-service/
-```
+Керівник дипломної роботи — **Гаврилко Євген Володимирович**.

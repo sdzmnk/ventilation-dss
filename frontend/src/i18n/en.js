@@ -52,7 +52,6 @@ export default {
   maxLabel: "max",
   countLabel: "n",
 
-  // === Real sensor channels ===
   wind_speed:             "Wind speed",
   wind_direction:         "Wind direction",
   air_density:            "Air density",

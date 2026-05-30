@@ -1,6 +1,3 @@
-/**
- * Tests for OptimizationPage component (new KP/OO/Δp optimizer).
- */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
@@ -93,7 +90,6 @@ describe("OptimizationPage — running optimization", () => {
     const runButton = screen.getByRole("button", { name: /run|запуст|оптим/i });
     await user.click(runButton);
     await waitFor(() => {
-      // optimal_flow_kp = 18.5 should appear in the result panel
       expect(screen.getByText(/18\.5/)).toBeInTheDocument();
     });
   });
